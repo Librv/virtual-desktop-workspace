@@ -168,3 +168,25 @@ Build and test after installing `extra-cmake-modules` and `ninja`:
 ```
 cmake --preset dev && cmake --build --preset dev && ctest --preset dev
 ```
+
+## First real run (2026-10-17, outside the sandbox)
+
+`scripts/dev-session.sh selftest`: all 4 checks PASS (KWin scripting on the
+nested bus, kglobalaccel owned by the nested kwin_wayland, a KWin script sees
+the Konsole window, `kdotool search` finds it). Both with and without
+Xwayland the session comes up and runs the ready hook.
+
+Two bugs fixed on the way:
+
+- `is_running` checked `/proc/<pid>/comm` for `dbus-run-session` right after
+  launch, while the process was still `env`, so start killed a healthy session
+  instantly and reported a 20 s timeout with an empty log. It now also accepts
+  `setsid` and `env`, and start says "exited during startup" when that is what
+  happened.
+- Qt logged to journald (stderr is not a terminal), so KWin script `print()`
+  output went to the user's journal instead of `kwin.log`. Start now sets
+  `QT_FORCE_STDERR_LOGGING=1`.
+
+Noise to expect in `kwin.log`: `xdg-desktop-portal-kde` and the kwallet portal
+abort (signal 6) in the nested session. Harmless for placement work; it may
+matter if a later task needs portals.

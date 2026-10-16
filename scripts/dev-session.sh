@@ -51,7 +51,12 @@ is_running() {
     [[ -n $pid ]] && kill -0 "$pid" 2>/dev/null || return 1
     # Guard against a stale pid file whose pid got reused: stop signals the
     # whole process group, so make sure it is still our dbus-run-session.
-    [[ $(cat "/proc/$pid/comm" 2>/dev/null) == dbus-run-sessio* ]]
+    # Right after start the pid briefly still shows as setsid or env, before
+    # they exec into dbus-run-session, so accept those too.
+    case $(cat "/proc/$pid/comm" 2>/dev/null) in
+        dbus-run-sessio* | setsid | env) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 # Environment for processes inside the nested session. Printed as
@@ -218,12 +223,17 @@ EOF
         KDE_SESSION_VERSION=6 \
         QT_QPA_PLATFORM=wayland \
         QT_LOGGING_RULES="kwin_scripting.debug=true" \
+        QT_FORCE_STDERR_LOGGING=1 \
         dbus-run-session --config-file="$busconf" -- kwin_wayland "${kwin_args[@]}" \
         >>"$LOG_FILE" 2>&1 </dev/null &
     echo $! >"$PID_FILE"
 
     if ! wait_ready; then
-        info "KWin did not come up within ${START_TIMEOUT}s; last log lines:"
+        if is_running; then
+            info "KWin did not come up within ${START_TIMEOUT}s; last log lines:"
+        else
+            info "KWin exited during startup; last log lines:"
+        fi
         tail -n 20 "$LOG_FILE" >&2 || true
         cmd_stop >/dev/null 2>&1 || true
         exit 1
