@@ -8,6 +8,11 @@ global shortcut, on KDE Plasma 6 (Wayland).
 - Checks that the current virtual desktop has zero windows (including minimized ones)
 - If empty, launches 3 Konsole windows and places them as flush quadrants:
   top-right, bottom-left, bottom-right (top-left intentionally left empty)
+- If not empty, launches nothing and shows a Plasma on-screen message ("Desktop not
+  empty. Tap D again to set up here."). Pressing the shortcut again within 2 seconds
+  on the same desktop sets up anyway: existing windows are left alone and the new
+  ones go into the same slots, even if they overlap. A later press shows the message
+  again. The pending request is kept in `$XDG_RUNTIME_DIR/setup-workspace-<uid>.pending`.
 - Panel-aware: uses KWin's own usable-area calculation, so placement never overlaps
   the panel
 - Bound to a global shortcut via a `.desktop` file + KDE's Custom Shortcuts
@@ -38,8 +43,8 @@ Bind it to a global shortcut via System Settings → Shortcuts → Custom Shortc
   press, so changes sometimes require deleting and recreating the shortcut rather
   than just editing the file. The planned daemon (see `docs/`) replaces this mechanism.
 - Only one hardcoded layout (3 Konsoles, 3 corners), not yet configurable.
-- Requires a genuinely empty desktop; does not yet find/create one automatically if
-  the current one is occupied.
+- On a busy desktop the confirm is a second press of the whole shortcut, handled by
+  a new script run; holding the modifiers is not required.
 
 ## Project layout
 
