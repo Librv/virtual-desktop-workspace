@@ -10,8 +10,8 @@ Status values: `todo`, `in-progress`, `blocked`, `done`.
 | ID | Title | Depends on | Parallel group | Status |
 |---|---|---|---|---|
 | T0 | Specs, task files, CLAUDE.md | none | | done |
-| T0b | Dev environment: nested KWin, CMake skeleton, linters | T0 | A | todo |
-| Q1 | Bash script: busy-desktop OSD + confirm | T0 | A | todo |
+| T0b | Dev environment: nested KWin, CMake skeleton, linters | T0 | A | blocked (written; needs packages + sandbox decision, see docs/spikes/T0b.md) |
+| Q1 | Bash script: busy-desktop OSD + confirm | T0 | A | done (live check by user pending) |
 | S1 | Spike: KGlobalAccel tap/hold/confirm | T0b | B | todo |
 | S2 | Spike: radial overlay on LayerShellQt | T0b | B | todo |
 | S3 | Spike: KWin script placement via events | T0b | B | todo |
