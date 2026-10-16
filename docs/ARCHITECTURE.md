@@ -100,6 +100,10 @@ standard Shortcuts page rather than reimplementing a key editor.
   selection math, fraction-to-rectangle layout math.
 - **Integration tests:** a nested, headless KWin (`kwin_wayland --virtual` in
   its own D-Bus session) so tests launch and place real windows without
-  touching the user's desktop. Set up in T0b.
+  touching the user's desktop. Set up in T0b: `scripts/dev-session.sh`.
+  Integration tests run as `scripts/dev-session.sh run -- ctest ...` and
+  must skip (not fail) when no nested session is reachable. The nested
+  session has no keyboard, so real shortcut press/release is likely not testable
+  there (see `docs/spikes/T0b.md`).
 - **Manual:** the radial menu feel and real key handling on the live session,
   done by the user.

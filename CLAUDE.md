@@ -42,5 +42,24 @@ the current virtual desktop, via global shortcuts and a radial menu.
 
 ## Build and test
 
-Set up in T0b. Expected: `cmake --preset dev`, `cmake --build --preset dev`,
-`ctest --preset dev`.
+Needs `extra-cmake-modules` and `ninja` installed.
+
+```
+cmake --preset dev && cmake --build --preset dev && ctest --preset dev
+cmake --build --preset dev --target clang-format   # format C++ sources
+```
+
+Nested KWin session (details and known gaps in `docs/spikes/T0b.md`):
+
+```
+scripts/dev-session.sh start            # headless 1920x1080 KWin, own bus/HOME
+scripts/dev-session.sh run -- konsole   # run anything against it
+scripts/dev-session.sh script foo.js    # run a KWin script, print its output
+scripts/dev-session.sh selftest
+scripts/dev-session.sh stop
+```
+
+The Claude Code sandbox blocks Unix sockets, so these only work when
+`scripts/dev-session.sh` runs outside it (see `docs/spikes/T0b.md`). Run each
+as a single command. Never point `kdotool`/`qdbus6` at the default bus: that
+is the live session.
