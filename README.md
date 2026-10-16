@@ -15,7 +15,7 @@ global shortcut, on KDE Plasma 6 (Wayland).
 ## Requirements
 
 - KDE Plasma 6, Wayland
-- [`kdotool`](https://github.com/jinliu/kdotool) — drives KWin's scripting API over
+- [`kdotool`](https://github.com/jinliu/kdotool): drives KWin's scripting API over
   D-Bus; not in official Arch/CachyOS repos, only the AUR (`kdotool-bin` is the
   prebuilt package)
 
@@ -36,13 +36,17 @@ Bind it to a global shortcut via System Settings → Shortcuts → Custom Shortc
   been unreliable in practice: it appears to cache the invoked command at
   registration time rather than re-reading the `.desktop` file's `Exec=` on every
   press, so changes sometimes require deleting and recreating the shortcut rather
-  than just editing the file. Phase 2 below replaces this mechanism entirely.
-- Only one hardcoded layout (3 Konsoles, 3 corners) — not yet configurable.
+  than just editing the file. The planned daemon (see `docs/`) replaces this mechanism.
+- Only one hardcoded layout (3 Konsoles, 3 corners), not yet configurable.
 - Requires a genuinely empty desktop; does not yet find/create one automatically if
   the current one is occupied.
 
 ## Project layout
 
 ```
-setup-workspace.sh   # current implementation (Phase 0/1)
+setup-workspace.sh   # current implementation (legacy, replaced in T7)
+docs/                # spec, architecture, decisions, tasks
 ```
+
+Planned direction (daemon, per-workspace shortcuts, radial menu, System Settings
+page) is described in `docs/SPEC.md` and `docs/ARCHITECTURE.md`.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # setup-workspace.sh
 #
-# Requires: kdotool (https://github.com/jinliu/kdotool) — xdotool-like tool
+# Requires: kdotool (https://github.com/jinliu/kdotool): xdotool-like tool
 # for KDE Plasma that drives KWin's scripting API over DBus.
 #
 # Checks that the CURRENT virtual desktop has zero windows assigned to it
@@ -10,13 +10,13 @@
 # usable area (top-left intentionally left empty).
 #
 # Bind this script to a global shortcut via System Settings > Shortcuts >
-# Custom Shortcuts (Command/URL trigger) — it must run as a normal process
+# Custom Shortcuts (Command/URL trigger). It must run as a normal process
 # (not a pure KWin script) because KWin scripts cannot spawn processes.
 #
 # --- Self-logging (always on) ------------------------------------------
 # Everything below is logged unconditionally to a fixed file, regardless
 # of how this script gets invoked (terminal, gio launch, or the real
-# global shortcut via kglobalaccel) — this exists because kglobalaccel
+# global shortcut via kglobalaccel). This exists because kglobalaccel
 # appears to cache the invoked command at shortcut-registration time
 # rather than re-reading the .desktop file's Exec= on every press, which
 # made wrapping this in "sh -c '... > logfile'" at the .desktop level
@@ -37,7 +37,7 @@ command -v konsole >/dev/null || { echo "konsole not found." >&2; exit 1; }
 # instead of re-reading workspace.currentDesktop live. Without this, if
 # you switch virtual desktops while the script is still polling for new
 # windows, later steps silently start comparing against whatever desktop
-# is current *then* instead of the one this run actually targets — which
+# is current *then* instead of the one this run actually targets, which
 # is what was causing an unrelated window on a different desktop to get
 # grabbed and moved.
 TARGET_DESKTOP=$(kdotool get_desktop)
@@ -64,7 +64,7 @@ if (blockers.length > 0) {
 "
 
 if ! check_out=$(kdotool kwinscript --inline "$check_script" 2>&1); then
-    echo "Current virtual desktop is not empty — aborting." >&2
+    echo "Current virtual desktop is not empty, aborting." >&2
     echo "$check_out" >&2
     exit 1
 fi
@@ -126,7 +126,7 @@ mapfile -t ids <<< "$new_ids"
 id1=${ids[0]:-} id2=${ids[1]:-} id3=${ids[2]:-}
 
 if [[ -z "$id1" || -z "$id2" || -z "$id3" ]]; then
-    echo "Could not identify 3 new windows to place — aborting placement." >&2
+    echo "Could not identify 3 new windows to place, aborting placement." >&2
     exit 1
 fi
 
@@ -136,7 +136,7 @@ place() {
     kdotool windowsize "$id" "$w" "$h"
 }
 
-# Order among the 3 doesn't matter — they're identical fresh Konsoles.
+# Order among the 3 doesn't matter: they're identical fresh Konsoles.
 place "$id1" $(( AX + AW - WW )) "$AY" "$WW" "$WH" &            # top-right
 place "$id2" "$AX" $(( AY + AH - WH )) "$WW" "$WH" &            # bottom-left
 place "$id3" $(( AX + AW - WW )) $(( AY + AH - WH )) "$WW" "$WH" &  # bottom-right
