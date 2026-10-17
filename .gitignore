@@ -3,3 +3,6 @@ build/
 *.user
 .cache/
 compile_commands.json
+/packaging/arch/src/
+/packaging/arch/pkg/
+/packaging/arch/*.pkg.tar.*
