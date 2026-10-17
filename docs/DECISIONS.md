@@ -33,6 +33,7 @@ rewrite old entries, add a new one that supersedes them.
 | 26 | 2026-10-17 | Supersedes 9 and the OSD parts of 2 and 19. Confirm only by keeping Ctrl+Meta held and pressing D again, after a tap and after a menu pick; modifier release or the 2 s timeout cancels; already released modifiers cancel without a toast. Workspace shortcuts keep the timeout-only cancel | User decision after the first live test |
 | 27 | 2026-10-17 | Messages use our own layer-shell toast centered at the top of the screen instead of Plasma's OSD | Plasma's OSD position cannot be changed; user wants the toast at the top center |
 | 28 | 2026-10-17 | KCM save first merges workspaces that appeared in `vdwrc` since its last load or save (e.g. `vdwctl capture`); workspaces deleted in the KCM stay deleted. The placer no longer reports `WindowPlaced` | Saving dropped captures made while the KCM was open (and their shortcuts); `WindowPlaced` was only logged (audit) |
+| 29 | 2026-10-17 | Capture leaves out the windows of the D-Bus caller's process (System Settings, `kcmshell6`); `vdwctl capture` keeps the terminal it runs in | The settings window was saved as a slot of every workspace captured from the KCM. User request |
 
 ## Open
 

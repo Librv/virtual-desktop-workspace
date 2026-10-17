@@ -31,7 +31,9 @@ Workspaces can be created two ways:
 
 1. In the System Settings page, by adding apps and positions by hand.
 2. "Save current desktop as workspace": the user arranges real windows, then
-   captures the current desktop's windows into a new workspace.
+   captures the current desktop's windows into a new workspace. The windows
+   of the program that asked for the capture (System Settings itself) are
+   left out.
 
 ## Opening a workspace
 

@@ -18,6 +18,7 @@
         const g = w.frameGeometry;
         return {
             x: g.x, y: g.y, width: g.width, height: g.height,
+            pid: w.pid,
             desktopFileName: w.desktopFileName,
             resourceClass: w.resourceClass,
             caption: w.caption,

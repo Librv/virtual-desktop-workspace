@@ -14,6 +14,7 @@
 #include <KSharedConfig>
 
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
 #include <QDBusMessage>
 #include <QDateTime>
 #include <QJsonArray>
@@ -238,36 +239,40 @@ QString Manager::CaptureCurrentDesktop(const QString &name)
     setDelayedReply(true);
     const QDBusMessage message = this->message();
     const QDBusConnection connection = this->connection();
-    capture(name.trimmed(), [message, connection](const QString &result) {
+    const qint64 callerPid = connection.interface()->servicePid(message.service()).value();
+    capture(name.trimmed(), callerPid, [message, connection](const QString &result) {
         qCInfo(VDW_DAEMON) << "CaptureCurrentDesktop reply" << result;
         connection.send(message.createReply(result));
     });
     return QString();
 }
 
-void Manager::capture(const QString &name, const Reply &reply)
+void Manager::capture(const QString &name, qint64 callerPid, const Reply &reply)
 {
-    queryArea(m_scripts, [this, name, reply](const QRect &area, const QString &areaError) {
+    queryArea(m_scripts, [this, name, callerPid, reply](const QRect &area, const QString &areaError) {
         if (!areaError.isEmpty()) {
             reply(QStringLiteral("error: ") + areaError);
             return;
         }
-        m_scripts->query(QStringLiteral("list"), [this, name, area, reply](const QJsonObject &result, const QString &error) {
+        m_scripts->query(QStringLiteral("list"), [this, name, callerPid, area, reply](const QJsonObject &result, const QString &error) {
             if (!error.isEmpty()) {
                 reply(QStringLiteral("error: ") + error);
                 return;
             }
-            reply(saveCapture(name, area, result.value(QLatin1String("windows")).toArray()));
+            reply(saveCapture(name, area, result.value(QLatin1String("windows")).toArray(), callerPid));
         });
     });
 }
 
-QString Manager::saveCapture(const QString &name, const QRect &area, const QJsonArray &windows)
+QString Manager::saveCapture(const QString &name, const QRect &area, const QJsonArray &windows, qint64 callerPid)
 {
     QList<Slot> slots;
     QString icon;
     for (const QJsonValue &value : windows) {
         const QJsonObject window = value.toObject();
+        if (callerPid > 0 && static_cast<qint64>(window.value(QLatin1String("pid")).toDouble()) == callerPid) {
+            continue;
+        }
         const QString appId = window.value(QLatin1String("desktopFileName")).toString();
         const KService::Ptr service = appId.isEmpty() ? KService::Ptr() : KService::serviceByDesktopName(appId);
         if (!service) {
