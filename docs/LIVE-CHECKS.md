@@ -8,7 +8,9 @@ unless a step says otherwise. These merge the user steps of `spikes/S1.md`,
 
 ## 0. Setup
 
-1. Log out and in, or run `vdwd &`. Check: `vdwctl list` prints JSON.
+1. Log out and in, or run `vdwctl list` (D-Bus activation starts vdwd with
+   the session environment; do not run `vdwd` from a terminal, its apps would
+   inherit that terminal's environment). Check: `vdwctl list` prints JSON.
    Expected: on a first run without `~/.config/vdwrc`, one workspace
    "3 Konsoles" marked `isDefault`.
 2. Open System Settings, Shortcuts, search "Virtual Desktop Workspace".

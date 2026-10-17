@@ -48,7 +48,11 @@ service file, an XDG autostart entry and the System Settings page.
 
 ## First run
 
-Log out and in (or run `vdwd &` once). On the first start, if `~/.config/vdwrc`
+Log out and in, or run `vdwctl list` once: vdwd is D-Bus activated, so any
+`vdwctl` call starts it with your Plasma session's environment. Do not start
+`vdwd` directly from a terminal: apps it launches inherit that terminal's
+environment (for example a different `SHELL`, so Konsole opens the wrong
+shell). On the first start, if `~/.config/vdwrc`
 does not exist, vdwd writes a starting workspace "3 Konsoles" (three Konsole
 windows in the top-right, bottom-left and bottom-right quadrants) and makes it the
 default, so Ctrl+Meta+D works right away. An existing `vdwrc` is never touched.
