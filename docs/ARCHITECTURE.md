@@ -146,6 +146,8 @@ numbers arrive as int32, so integer parameters are `i`).
 - App windows are `normalWindow && minimizable` (plain `normalWindow` also
   matches layer-shell surfaces, including our own radial menu). The emptiness
   check additionally ignores vdwd's own windows.
+- Window lists come from `workspace.windowList()`; `workspace.stackingOrder`
+  still contains windows that were just closed, so it is only used to sort.
 - No shortcut "doorbell" (`registerShortcut` persists in the user's shortcut
   config) and no script config (`readConfig` does not see external writes).
 

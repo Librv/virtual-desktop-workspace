@@ -24,6 +24,8 @@ rewrite old entries, add a new one that supersedes them.
 | 17 | 2026-10-17 | `OpenWorkspace` also replies `busy` (unless forced) while launches from an earlier open are still pending | The desktop looks empty until the windows appear, so a quick double press would launch everything twice; the confirm flow covers the intentional case (T2) |
 | 18 | 2026-10-17 | On startup vdwd removes `open-<id>` shortcuts whose workspace no longer exists; `main` is never touched | A workspace deleted while the daemon was not running would otherwise leave a dead entry in System Settings (T3b review) |
 | 19 | 2026-10-17 | A tap with no usable default workspace shows an OSD hint instead of doing nothing | Silent failure is confusing; holding still opens the menu (T3b review) |
+| 20 | 2026-10-17 | Saving (KCM or capture) rewrites every `[Workspace]` group through the shared writer; entries the loader rejects are dropped | One writer for both paths; the KCM shows the loader's warnings before a save (T5, T6) |
+| 21 | 2026-10-17 | KWin scripts list windows from `workspace.windowList()`; `stackingOrder` is only a sort key | `stackingOrder` still contains just-closed windows (T6) |
 
 ## Open
 
