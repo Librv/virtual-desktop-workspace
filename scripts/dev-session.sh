@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Librv
+# SPDX-License-Identifier: MIT
 # dev-session.sh: a headless, nested KWin session for development and tests.
 #
 # Starts kwin_wayland with the virtual backend inside its own D-Bus session,

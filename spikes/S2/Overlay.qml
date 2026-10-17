@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
 // S2 spike: radial menu scene. `menu` is the C++ Menu object.
 import QtQuick
 import QtQuick.Shapes

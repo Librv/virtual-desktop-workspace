@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
+
 // One-shot query: is the current desktop free of app windows? vdwd replaces
 // the @...@ placeholders before loading, and unloads the script afterwards.
 (function() {

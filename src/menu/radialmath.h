@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
 // Slice selection math for the radial menu. Pure, no GUI.
 #pragma once
 

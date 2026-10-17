@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
+
 // Long-lived KWin script loaded by vdwd at startup (docs/ARCHITECTURE.md,
 // "KWin script"). The daemon decides, this script only reports new windows and
 // applies the rect the daemon names.

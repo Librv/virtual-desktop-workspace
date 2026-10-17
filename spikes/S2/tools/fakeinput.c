@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
 // S2 spike: drive KWin's org_kde_kwin_fake_input from the command line.
 // ONLY for the nested dev session: KWin only offers the global to clients
 // whose executable is listed in a .desktop file with

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
+
 // One-shot query: the app windows of the current desktop, bottom to top in
 // stacking order (same filter as empty.js). vdwd replaces the @...@
 // placeholders before loading, and unloads the script afterwards. Uses

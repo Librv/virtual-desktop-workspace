@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
+
 // Starts vdwd inside the nested KWin session (scripts/dev-session.sh) and
 // checks vdwctl, the /Debug gesture input and (when the helpers are built)
 // real key events against it. Skips when not run inside that session, so it

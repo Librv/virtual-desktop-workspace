@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
+
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts

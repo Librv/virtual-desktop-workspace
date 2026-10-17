@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
+
 #include "gesturecontroller.h"
 
 #include "kwinscripts.h"

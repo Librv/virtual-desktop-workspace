@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
 // Demo for nested-session checks (not installed). Shows the radial menu and
 // reads commands from stdin, one per line:
 //   show   map the menu again

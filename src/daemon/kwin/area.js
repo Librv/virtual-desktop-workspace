@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
+
 // One-shot query: usable area (panels excluded) of the active screen on the
 // current desktop. vdwd replaces the @...@ placeholders before loading.
 (function() {

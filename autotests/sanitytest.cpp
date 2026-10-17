@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Librv
+// SPDX-License-Identifier: MIT
+
 // Placeholder test so the build and CTest wiring can be checked before real
 // code exists. Replace or remove once the first real unit tests land.
 
