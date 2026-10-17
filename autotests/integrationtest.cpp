@@ -1,5 +1,6 @@
 // Starts vdwd inside the nested KWin session (scripts/dev-session.sh) and
-// checks vdwctl against it. Skips when not run inside that session, so it
+// checks vdwctl, the /Debug gesture input and (when the helpers are built)
+// real key events against it. Skips when not run inside that session, so it
 // never touches the live session bus:
 //   scripts/dev-session.sh run -- ctest --preset dev -R integrationtest
 
@@ -12,11 +13,13 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusReply>
+#include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -168,6 +171,98 @@ private:
         return true;
     }
 
+    // Calls a method of the /Debug object (never the live session: the bus was
+    // checked in initTestCase).
+    void debugCall(const QString &method, const QVariantList &args)
+    {
+        QDBusMessage message = QDBusMessage::createMethodCall(QStringLiteral("io.github.librv.vdw"),
+                                                              QStringLiteral("/Debug"),
+                                                              QStringLiteral("io.github.librv.vdw.Debug"),
+                                                              method);
+        message.setArguments(args);
+        const QDBusMessage reply = QDBusConnection::sessionBus().call(message, QDBus::Block, 5000);
+        QVERIFY2(reply.type() == QDBusMessage::ReplyMessage, qPrintable(reply.errorMessage()));
+    }
+    void tap(const QString &shortcut)
+    {
+        debugCall(QStringLiteral("Press"), {shortcut});
+        QTest::qWait(60);
+        debugCall(QStringLiteral("Release"), {shortcut});
+    }
+
+    // Number of KWin windows (stacking order, so layer-shell surfaces too)
+    // whose resource class is `cls`.
+    int windowsOfClass(const QString &cls)
+    {
+        m_receiver.reports.clear();
+        const QString source = QStringLiteral(
+            "callDBus('org.kde.vdw.T2test', '/T2', 'org.kde.vdw.T2test', 'Report',\n"
+            "  JSON.stringify(workspace.stackingOrder.map(function(w) { return w.resourceClass; })));\n");
+        if (!runScript(QStringLiteral("vdw-t3b-classes"), source)
+            || !QTest::qWaitFor(
+                [this] {
+                    return !m_receiver.reports.isEmpty();
+                },
+                5000)) {
+            return -1;
+        }
+        int count = 0;
+        for (const QJsonValue &v : QJsonDocument::fromJson(m_receiver.reports.last().toUtf8()).array()) {
+            count += v.toString() == cls;
+        }
+        return count;
+    }
+
+    bool closeAll()
+    {
+        runScript(QStringLiteral("vdw-t3b-close"),
+                  QStringLiteral("workspace.windowList().forEach(function(w) { if (w.normalWindow && w.minimizable) { w.closeWindow(); } });\n"));
+        return QTest::qWaitFor(
+            [this] {
+                return snapshot().windows.isEmpty();
+            },
+            15000);
+    }
+
+    // True if the desktop holds exactly one window and it covers the area.
+    bool oneWindowFillsArea()
+    {
+        const Snapshot snap = snapshot();
+        return snap.windows.size() == 1 && near(snap.windows.first().rect, snap.area);
+    }
+
+    // Starts a helper binary of the nested session; null if it cannot start.
+    std::unique_ptr<QProcess> startHelper(const QString &path, const QStringList &args)
+    {
+        auto process = std::make_unique<QProcess>();
+        process->setProcessChannelMode(QProcess::ForwardedChannels);
+        process->start(path, args);
+        if (!process->waitForStarted()) {
+            return nullptr;
+        }
+        return process;
+    }
+
+    // Writes the .desktop file that lets KWin hand org_kde_kwin_fake_input to
+    // `exe`, into the nested XDG_DATA_HOME only (S1).
+    bool authorizeFakeInput(const QString &exe, const QString &name)
+    {
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+        if (!dir.contains(QLatin1String("/vdw"))) {
+            return false;
+        }
+        QDir().mkpath(dir + QStringLiteral("/applications"));
+        QFile file(dir + QStringLiteral("/applications/") + name + QStringLiteral(".desktop"));
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            return false;
+        }
+        file.write(QStringLiteral("[Desktop Entry]\nType=Application\nName=%1\nExec=%2\nNoDisplay=true\n"
+                                  "X-KDE-Wayland-Interfaces=org_kde_kwin_fake_input\n")
+                       .arg(name, exe)
+                       .toUtf8());
+        return true;
+    }
+
     QTemporaryDir m_dir;
     Receiver m_receiver;
     std::unique_ptr<QProcess> m_daemon;
@@ -199,7 +294,8 @@ private Q_SLOTS:
             "[Workspace][two][Slot][0]\nApp=org.kde.konsole\nGeometry=0,0,0.5,1\n\n"
             "[Workspace][two][Slot][1]\nApp=org.kde.konsole\nGeometry=0.5,0,0.5,0.5\n\n"
             "[Workspace][two][Slot][2]\nApp=org.kde.konsole\nGeometry=0.5,0.5,0.5,0.5\n\n"
-            "[Workspace][one]\nName=One\nOrder=0\nIcon=folder\n");
+            "[Workspace][one]\nName=One\nOrder=0\nIcon=folder\n\n"
+            "[Workspace][one][Slot][0]\nApp=org.kde.konsole\nGeometry=0,0,1,1\n");
         cfg.close();
 
         auto bus = QDBusConnection::sessionBus();
@@ -208,7 +304,7 @@ private Q_SLOTS:
 
         m_daemon = std::make_unique<QProcess>();
         m_daemon->setProcessChannelMode(QProcess::ForwardedChannels);
-        m_daemon->start(QStringLiteral(VDWD_PATH), {QStringLiteral("--config"), cfg.fileName()});
+        m_daemon->start(QStringLiteral(VDWD_PATH), {QStringLiteral("--config"), cfg.fileName(), QStringLiteral("--debug")});
         QVERIFY(m_daemon->waitForStarted());
 
         auto *iface = QDBusConnection::sessionBus().interface();
@@ -307,6 +403,152 @@ private Q_SLOTS:
         const Result r = ctl({QStringLiteral("reload")});
         QCOMPARE(r.exitCode, 0);
         QCOMPARE(ctl({QStringLiteral("list")}).exitCode, 0);
+    }
+
+    // ---- gesture input through /Debug (T3b) ----
+
+    // Tap of the main shortcut on an empty desktop opens the default workspace.
+    void testTapOpensDefault()
+    {
+        QVERIFY(closeAll());
+        debugCall(QStringLiteral("ModifiersHeld"), {true});
+        tap(QStringLiteral("main"));
+        QTRY_VERIFY_WITH_TIMEOUT(windowsAtSlots(1, 3), 20000);
+        debugCall(QStringLiteral("ModifiersHeld"), {false});
+    }
+
+    // Busy desktop: the tap opens nothing; a second press with the modifiers
+    // held confirms (force) and the windows appear next to the old ones.
+    void testBusyThenConfirm()
+    {
+        QVERIFY(windowsAtSlots(1, 3));
+        debugCall(QStringLiteral("ModifiersHeld"), {true});
+        tap(QStringLiteral("main"));
+        // After the busy answer, inside the confirm timeout (2 s).
+        QTest::qWait(800);
+        QVERIFY(windowsAtSlots(1, 3));
+        tap(QStringLiteral("main"));
+        QTRY_VERIFY_WITH_TIMEOUT(windowsAtSlots(2, 6), 20000);
+        debugCall(QStringLiteral("ModifiersHeld"), {false});
+    }
+
+    // Releasing the modifiers between the two taps cancels the confirm.
+    void testModifiersReleasedCancelsConfirm()
+    {
+        QVERIFY(windowsAtSlots(2, 6));
+        debugCall(QStringLiteral("ModifiersHeld"), {true});
+        tap(QStringLiteral("main"));
+        QTest::qWait(1000);
+        debugCall(QStringLiteral("ModifiersHeld"), {false});
+        tap(QStringLiteral("main"));
+        QTest::qWait(3000);
+        QVERIFY(windowsAtSlots(2, 6));
+    }
+
+    // Holding the main shortcut shows the menu overlay; releasing it over the
+    // dead zone cancels and opens nothing.
+    void testHoldShowsMenuAndCancels()
+    {
+        QCOMPARE(windowsOfClass(QStringLiteral("vdwd")), 0);
+        debugCall(QStringLiteral("Press"), {QStringLiteral("main")});
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 1, 10000);
+        debugCall(QStringLiteral("Release"), {QStringLiteral("main")});
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
+        QTest::qWait(2000);
+        QVERIFY(windowsAtSlots(2, 6));
+    }
+
+    // A workspace shortcut opens its own workspace and never shows the menu,
+    // even when held longer than the hold threshold.
+    void testWorkspaceShortcut()
+    {
+        QVERIFY(closeAll());
+        debugCall(QStringLiteral("Press"), {QStringLiteral("one")});
+        QTest::qWait(700);
+        QCOMPARE(windowsOfClass(QStringLiteral("vdwd")), 0);
+        debugCall(QStringLiteral("Release"), {QStringLiteral("one")});
+        QTRY_VERIFY_WITH_TIMEOUT(oneWindowFillsArea(), 20000);
+        QTest::qWait(1500);
+        QVERIFY(oneWindowFillsArea());
+    }
+
+    // ---- real key events (needs spikes/S1 and S2 built) ----
+
+    // Ctrl+Meta+D tap through org_kde_kwin_fake_input, kglobalaccel, vdwd.
+    void testRealKeyTap()
+    {
+        const QString inject = QStringLiteral(S1INJECT_PATH);
+        if (!QFileInfo::exists(inject)) {
+            QSKIP("spikes/S1/build/s1inject is not built");
+        }
+        if (!authorizeFakeInput(inject, QStringLiteral("vdw-s1-inject"))) {
+            QSKIP("cannot authorize the injector in the nested XDG_DATA_HOME");
+        }
+        QVERIFY(closeAll());
+        const QStringList steps = {QStringLiteral("300"),
+                                   QStringLiteral("+ctrl"),
+                                   QStringLiteral("30"),
+                                   QStringLiteral("+meta"),
+                                   QStringLiteral("30"),
+                                   QStringLiteral("+d"),
+                                   QStringLiteral("80"),
+                                   QStringLiteral("-d"),
+                                   QStringLiteral("30"),
+                                   QStringLiteral("-meta"),
+                                   QStringLiteral("30"),
+                                   QStringLiteral("-ctrl"),
+                                   QStringLiteral("100")};
+        auto process = startHelper(inject, steps);
+        QVERIFY(process);
+        QVERIFY(process->waitForFinished(15000));
+        QCOMPARE(process->exitCode(), 0);
+        QTRY_VERIFY_WITH_TIMEOUT(windowsAtSlots(1, 3), 20000);
+    }
+
+    // Best effort: hold Ctrl+Meta+D, the overlay appears, move the pointer
+    // onto the first slice (straight up from the center), release: opens "one".
+    void testRealKeyMenu()
+    {
+        const QString inject = QStringLiteral(S1INJECT_PATH);
+        const QString pointer = QStringLiteral(S2FAKEINPUT_PATH);
+        if (!QFileInfo::exists(inject) || !QFileInfo::exists(pointer)) {
+            QSKIP("spikes/S1 or spikes/S2 helpers are not built");
+        }
+        if (!authorizeFakeInput(inject, QStringLiteral("vdw-s1-inject")) || !authorizeFakeInput(pointer, QStringLiteral("vdw-s2-fakeinput"))) {
+            QSKIP("cannot authorize the helpers in the nested XDG_DATA_HOME");
+        }
+        QVERIFY(closeAll());
+        const QRect area = snapshot().area;
+        const int cx = area.center().x();
+        const int cy = area.center().y();
+        const auto moveTo = [&](int x, int y) {
+            auto p = startHelper(pointer, {QStringLiteral("abs"), QString::number(x), QString::number(y)});
+            return p && p->waitForFinished(10000) && p->exitCode() == 0;
+        };
+        QVERIFY(moveTo(cx, cy));
+
+        const QStringList steps = {QStringLiteral("300"),
+                                   QStringLiteral("+ctrl"),
+                                   QStringLiteral("30"),
+                                   QStringLiteral("+meta"),
+                                   QStringLiteral("30"),
+                                   QStringLiteral("+d"),
+                                   QStringLiteral("9000"),
+                                   QStringLiteral("-d"),
+                                   QStringLiteral("30"),
+                                   QStringLiteral("-meta"),
+                                   QStringLiteral("30"),
+                                   QStringLiteral("-ctrl"),
+                                   QStringLiteral("100")};
+        auto keys = startHelper(inject, steps);
+        QVERIFY(keys);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 1, 10000);
+        QVERIFY(moveTo(cx, cy - 120));
+        QVERIFY(moveTo(cx, cy - 200));
+        QVERIFY(keys->waitForFinished(20000));
+        QCOMPARE(keys->exitCode(), 0);
+        QTRY_VERIFY_WITH_TIMEOUT(oneWindowFillsArea(), 20000);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
     }
 };
 

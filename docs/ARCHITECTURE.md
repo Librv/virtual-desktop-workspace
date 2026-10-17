@@ -125,7 +125,7 @@ numbers arrive as int32, so integer parameters are `i`).
 | | `WindowPlaced(s json)` | script confirms a placement |
 | | `QueryResult(s requestId, s json)` | answers of one-shot query scripts |
 | | `CursorPos(i x, i y)` | pointer position for the radial menu center |
-| `/Debug`, `io.github.librv.vdw.Debug` | `Press()`, `Release()`, `ModifiersHeld(b)` | only when started with `--debug`: feed the state machine directly |
+| `/Debug`, `io.github.librv.vdw.Debug` | `Press(s shortcut)`, `Release(s shortcut)`, `ModifiersHeld(b)` | only when started with `--debug`: feed the state machine through the same path as real input; `shortcut` is `main` or a workspace id |
 
 ### KWin script (S3)
 

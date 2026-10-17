@@ -15,6 +15,7 @@ namespace Vdw
 
 class KWinScripts;
 class Launcher;
+class GestureController;
 
 /// Implements io.github.librv.vdw.Manager on /Manager.
 class Manager : public QObject, protected QDBusContext
@@ -26,6 +27,17 @@ public:
     /// `configPath` empty means the default `vdwrc`.
     Manager(const QString &configPath, KWinScripts *scripts, Launcher *launcher, QObject *parent = nullptr);
 
+    using Reply = std::function<void(const QString &)>;
+
+    const Config &config() const
+    {
+        return m_config;
+    }
+
+    /// Open workspace `id`; `reply` gets "opened", "busy" or "error: ..." (once,
+    /// from the event loop). Used by OpenWorkspace and the gesture controller.
+    void open(const QString &id, bool force, const Reply &reply);
+
     /// ScriptApi::ClaimWindow: the pixel rect JSON `{x, y, width, height}` for
     /// a window that belongs to a pending launch, else "".
     QString claimWindow(const QString &windowJson);
@@ -36,9 +48,11 @@ public Q_SLOTS:
     QString CaptureCurrentDesktop(const QString &name);
     void ReloadConfig();
 
-private:
-    using Reply = std::function<void(const QString &)>;
+Q_SIGNALS:
+    /// The config was re-read (ReloadConfig).
+    void configReloaded();
 
+private:
     void openWorkspace(const Workspace &workspace, bool force, const Reply &reply);
     void launchSlots(const Workspace &workspace, const QRect &area, const Reply &reply);
     void expirePending();
@@ -78,10 +92,16 @@ class DebugApi : public QObject
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "io.github.librv.vdw.Debug")
 
+public:
+    explicit DebugApi(GestureController *controller, QObject *parent = nullptr);
+
 public Q_SLOTS:
-    void Press();
-    void Release();
+    void Press(const QString &shortcut);
+    void Release(const QString &shortcut);
     void ModifiersHeld(bool held);
+
+private:
+    GestureController *m_controller;
 };
 
 } // namespace Vdw

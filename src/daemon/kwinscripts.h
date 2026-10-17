@@ -32,8 +32,15 @@ public:
     void start();
 
     /// Run the one-shot script `kind` ("empty" or "area"). `callback` is
-    /// called exactly once, from the event loop.
-    void query(const QString &kind, QueryCallback callback, int timeoutMs = 5000);
+    /// called exactly once, from the event loop. Returns the request id.
+    QString query(const QString &kind, QueryCallback callback, int timeoutMs = 5000);
+
+    /// Ask KWin for the pointer position (the one-shot "cursor" script answers
+    /// through ScriptApi::CursorPos). `result` has `x` and `y`.
+    void queryCursor(QueryCallback callback, int timeoutMs = 2000);
+
+    /// Called by ScriptApi::CursorPos.
+    void handleCursor(int x, int y);
 
     /// Called by ScriptApi::QueryResult.
     void handleResult(const QString &requestId, const QString &json);
@@ -55,6 +62,7 @@ private:
     QDBusServiceWatcher *m_watcher = nullptr;
     QHash<QString, PendingQuery> m_queries;
     int m_nextRequest = 0;
+    QString m_cursorRequest; ///< request id of the cursor query in flight, if any
     bool m_placerLoading = false;
     bool m_placerReload = false;
 };

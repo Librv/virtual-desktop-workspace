@@ -1,5 +1,6 @@
 #include "manager.h"
 
+#include "gesturecontroller.h"
 #include "kwinscripts.h"
 #include "launcher.h"
 #include "layout.h"
@@ -54,8 +55,7 @@ QString Manager::ListWorkspaces()
 QString Manager::OpenWorkspace(const QString &id, bool force)
 {
     qCInfo(VDW_DAEMON) << "OpenWorkspace" << id << "force" << force;
-    const Workspace *workspace = Config::isValidId(id) ? m_config.find(id) : nullptr;
-    if (!workspace) {
+    if (!Config::isValidId(id) || !m_config.find(id)) {
         return QStringLiteral("error: unknown workspace");
     }
 
@@ -63,11 +63,23 @@ QString Manager::OpenWorkspace(const QString &id, bool force)
     setDelayedReply(true);
     const QDBusMessage message = this->message();
     const QDBusConnection connection = this->connection();
-    openWorkspace(*workspace, force, [message, connection](const QString &result) {
+    open(id, force, [message, connection](const QString &result) {
         qCInfo(VDW_DAEMON) << "OpenWorkspace reply" << result;
         connection.send(message.createReply(result));
     });
     return QString();
+}
+
+void Manager::open(const QString &id, bool force, const Reply &reply)
+{
+    const Workspace *workspace = Config::isValidId(id) ? m_config.find(id) : nullptr;
+    if (!workspace) {
+        QTimer::singleShot(0, this, [reply] {
+            reply(QStringLiteral("error: unknown workspace"));
+        });
+        return;
+    }
+    openWorkspace(*workspace, force, reply);
 }
 
 void Manager::openWorkspace(const Workspace &workspace, bool force, const Reply &reply)
@@ -208,7 +220,7 @@ void Manager::ReloadConfig()
     m_config = loadConfig(m_configPath);
     m_matcher.setTimeoutMs(m_config.placementTimeoutMs());
     qCInfo(VDW_DAEMON) << "reloaded:" << m_config.workspaces().size() << "workspaces," << m_config.warnings().size() << "warnings";
-    // T3 re-registers shortcuts here.
+    Q_EMIT configReloaded();
 }
 
 ScriptApi::ScriptApi(Manager *manager, KWinScripts *scripts, QObject *parent)
@@ -236,21 +248,31 @@ void ScriptApi::QueryResult(const QString &requestId, const QString &json)
 void ScriptApi::CursorPos(int x, int y)
 {
     qCInfo(VDW_DAEMON) << "CursorPos" << x << y;
+    m_scripts->handleCursor(x, y);
 }
 
-void DebugApi::Press()
+DebugApi::DebugApi(GestureController *controller, QObject *parent)
+    : QObject(parent)
+    , m_controller(controller)
 {
-    qCInfo(VDW_DAEMON) << "Debug Press";
 }
 
-void DebugApi::Release()
+void DebugApi::Press(const QString &shortcut)
 {
-    qCInfo(VDW_DAEMON) << "Debug Release";
+    qCInfo(VDW_DAEMON) << "Debug Press" << shortcut;
+    m_controller->press(shortcutFromName(shortcut));
+}
+
+void DebugApi::Release(const QString &shortcut)
+{
+    qCInfo(VDW_DAEMON) << "Debug Release" << shortcut;
+    m_controller->release(shortcutFromName(shortcut));
 }
 
 void DebugApi::ModifiersHeld(bool held)
 {
     qCInfo(VDW_DAEMON) << "Debug ModifiersHeld" << held;
+    m_controller->setModifiersHeld(held);
 }
 
 } // namespace Vdw

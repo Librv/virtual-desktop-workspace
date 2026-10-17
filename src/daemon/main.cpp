@@ -1,7 +1,10 @@
 #include "dbusnames.h"
+#include "gesturecontroller.h"
 #include "kwinscripts.h"
 #include "launcher.h"
 #include "manager.h"
+#include "radialmenu.h"
+#include "shortcuts.h"
 
 #include <KDBusService>
 
@@ -30,7 +33,10 @@ int main(int argc, char *argv[])
     Vdw::Launcher launcher;
     Vdw::Manager manager(parser.value(configOption), &scripts, &launcher);
     Vdw::ScriptApi script(&manager, &scripts);
-    Vdw::DebugApi debug;
+    Vdw::Shortcuts shortcuts;
+    RadialMenu menu;
+    Vdw::GestureController controller(&manager, &shortcuts, &scripts, &menu);
+    Vdw::DebugApi debug(&controller);
 
     QDBusConnection bus = QDBusConnection::sessionBus();
     constexpr auto options = QDBusConnection::ExportAllSlots;
@@ -47,6 +53,13 @@ int main(int argc, char *argv[])
     // reacts to the name appearing never sees UnknownObject. A second
     // instance exits here.
     KDBusService service(KDBusService::Unique);
+
+    // Registers the global shortcuts; only after the name is ours, so a second
+    // instance never touches them.
+    shortcuts.sync(manager.config());
+    QObject::connect(&manager, &Vdw::Manager::configReloaded, &shortcuts, [&shortcuts, &manager] {
+        shortcuts.sync(manager.config());
+    });
 
     // After the name is ours: the placer calls back as soon as it is loaded.
     scripts.start();

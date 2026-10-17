@@ -157,7 +157,7 @@ void KWinScripts::unloadScript(const QString &name)
     callAsync(this, scriptingCall(QStringLiteral("unloadScript"), {name}), [](const QDBusMessage &) { });
 }
 
-void KWinScripts::query(const QString &kind, QueryCallback callback, int timeoutMs)
+QString KWinScripts::query(const QString &kind, QueryCallback callback, int timeoutMs)
 {
     const QString requestId = QString::number(++m_nextRequest);
     QString source = readResource(kind + QStringLiteral(".js"));
@@ -165,7 +165,7 @@ void KWinScripts::query(const QString &kind, QueryCallback callback, int timeout
         QTimer::singleShot(0, this, [callback = std::move(callback)] {
             callback({}, QStringLiteral("unknown query"));
         });
-        return;
+        return requestId;
     }
     source.replace(QStringLiteral("@REQUEST_ID@"), requestId);
     source.replace(QStringLiteral("@OWN_PID@"), QString::number(QCoreApplication::applicationPid()));
@@ -186,13 +186,28 @@ void KWinScripts::query(const QString &kind, QueryCallback callback, int timeout
 
     if (!writeFile(file, source)) {
         finishQuery(requestId, {}, QStringLiteral("cannot write the query script"));
-        return;
+        return requestId;
     }
     loadScript(file, name, [this, requestId](bool ok) {
         if (!ok) {
             finishQuery(requestId, {}, QStringLiteral("cannot load the query script into KWin"));
         }
     });
+    return requestId;
+}
+
+void KWinScripts::queryCursor(QueryCallback callback, int timeoutMs)
+{
+    // A request still in flight keeps its place and fails with a timeout.
+    m_cursorRequest = query(QStringLiteral("cursor"), std::move(callback), timeoutMs);
+}
+
+void KWinScripts::handleCursor(int x, int y)
+{
+    if (m_cursorRequest.isEmpty()) {
+        return;
+    }
+    finishQuery(m_cursorRequest, QJsonObject{{QStringLiteral("x"), x}, {QStringLiteral("y"), y}}, QString());
 }
 
 void KWinScripts::handleResult(const QString &requestId, const QString &json)
@@ -218,6 +233,9 @@ void KWinScripts::finishQuery(const QString &requestId, const QJsonObject &resul
     }
     PendingQuery pending = std::move(it.value());
     m_queries.erase(it);
+    if (requestId == m_cursorRequest) {
+        m_cursorRequest.clear();
+    }
 
     pending.timeout->stop();
     pending.timeout->deleteLater();
