@@ -1,4 +1,6 @@
 #include "dbusnames.h"
+#include "kwinscripts.h"
+#include "launcher.h"
 #include "manager.h"
 
 #include <KDBusService>
@@ -24,8 +26,10 @@ int main(int argc, char *argv[])
     parser.addOption(debugOption);
     parser.process(app);
 
-    Vdw::Manager manager(parser.value(configOption));
-    Vdw::ScriptApi script;
+    Vdw::KWinScripts scripts;
+    Vdw::Launcher launcher;
+    Vdw::Manager manager(parser.value(configOption), &scripts, &launcher);
+    Vdw::ScriptApi script(&manager, &scripts);
     Vdw::DebugApi debug;
 
     QDBusConnection bus = QDBusConnection::sessionBus();
@@ -43,6 +47,9 @@ int main(int argc, char *argv[])
     // reacts to the name appearing never sees UnknownObject. A second
     // instance exits here.
     KDBusService service(KDBusService::Unique);
+
+    // After the name is ours: the placer calls back as soon as it is loaded.
+    scripts.start();
 
     return app.exec();
 }
