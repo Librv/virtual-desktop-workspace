@@ -23,7 +23,7 @@ Status values: `todo`, `in-progress`, `blocked`, `done`.
 | T5 | KCM (System Settings page) | T1 | 1 | done |
 | T3b | Wire shortcuts, gesture machine, OSD and menu into vdwd | T2, T3a, T4a | 2 | done |
 | T6 | Save current desktop as workspace | T2, T3b | 2 | done |
-| T7 | Packaging, autostart, migrate off the bash script | all | 3 | todo |
+| T7 | Packaging, autostart, migrate off the bash script | all | 3 | in-progress |
 
 ## File ownership (no two parallel tasks touch the same file)
 

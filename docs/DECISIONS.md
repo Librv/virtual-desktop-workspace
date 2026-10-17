@@ -26,6 +26,10 @@ rewrite old entries, add a new one that supersedes them.
 | 19 | 2026-10-17 | A tap with no usable default workspace shows an OSD hint instead of doing nothing | Silent failure is confusing; holding still opens the menu (T3b review) |
 | 20 | 2026-10-17 | Saving (KCM or capture) rewrites every `[Workspace]` group through the shared writer; entries the loader rejects are dropped | One writer for both paths; the KCM shows the loader's warnings before a save (T5, T6) |
 | 21 | 2026-10-17 | KWin scripts list windows from `workspace.windowList()`; `stackingOrder` is only a sort key | `stackingOrder` still contains just-closed windows (T6) |
+| 22 | 2026-10-17 | Install through a PKGBUILD (`makepkg -si`, remove with `pacman -R`) | System Settings finds the KCM only in standard locations; clean uninstall. User accepted |
+| 23 | 2026-10-17 | Start vdwd with an XDG autostart entry plus D-Bus activation | Plasma turns autostart entries into systemd units itself; D-Bus activation covers a crashed or not yet started daemon. User accepted |
+| 24 | 2026-10-17 | On first start vdwd writes a "3 Konsoles" default workspace (the legacy layout) to `~/.config/vdwrc` if the file is missing | Ctrl+Meta+D keeps doing what the bash script did; `/etc/xdg` defaults are not read because vdwrc is opened with SimpleConfig. User accepted |
+| 25 | 2026-10-17 | Retire `setup-workspace.sh`: delete it from the repo, migration steps remove the old shortcut, `.desktop` file and script | Both cannot own Ctrl+Meta+D. User accepted |
 
 ## Open
 
