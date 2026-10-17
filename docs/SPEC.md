@@ -39,16 +39,14 @@ A workspace always opens on the **currently active** virtual desktop. No new
 desktops are created.
 
 - **Empty desktop:** the apps launch and are placed immediately.
-- **Desktop already has windows:** nothing launches yet. A Plasma on-screen
-  message appears, e.g. "Desktop not empty. Tap D again to set up 3 Konsoles
-  here." Pressing the same shortcut again confirms, which with the modifiers
-  still held is just tapping D again. Without a confirm, the request expires
-  after 2 seconds (configurable) and the message fades.
-  - After a **tap**, letting go of Ctrl or Meta cancels the request right
-    away.
-  - After a **radial menu pick**, the user has usually let go of every key,
-    so letting go does not cancel; pressing Ctrl+Meta+D again within the
-    timeout confirms.
+- **Desktop already has windows:** nothing launches yet. A toast appears
+  centered at the top of the screen, e.g. "Desktop not empty. Keep holding
+  Ctrl+Meta and press D to set up 3 Konsoles here." The only way to confirm
+  is to keep Ctrl+Meta held and press D again, after a tap and after a radial
+  menu pick alike. Letting go of Ctrl or Meta cancels right away and hides
+  the toast; so does the 2 second timeout (configurable). If the modifiers
+  are already up when the desktop turns out to be busy, the request is
+  cancelled without a toast.
 - This applies to every way of opening a workspace: the main shortcut, a
   per-workspace shortcut, and the radial menu.
 - On confirm, existing windows are left untouched; new windows go into their
@@ -63,7 +61,7 @@ desktops are created.
 | Tap D again while a confirm message is showing | Confirm |
 
 If no default workspace is set (or it was deleted), a tap shows a short
-on-screen hint instead; holding still opens the menu.
+toast instead (it hides after 3 seconds); holding still opens the menu.
 
 Per-workspace shortcuts only support tap (and the same confirm flow); they
 never open the menu.

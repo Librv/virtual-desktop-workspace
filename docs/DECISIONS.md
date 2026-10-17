@@ -30,6 +30,8 @@ rewrite old entries, add a new one that supersedes them.
 | 23 | 2026-10-17 | Start vdwd with an XDG autostart entry plus D-Bus activation | Plasma turns autostart entries into systemd units itself; D-Bus activation covers a crashed or not yet started daemon. User accepted |
 | 24 | 2026-10-17 | On first start vdwd writes a "3 Konsoles" default workspace (the legacy layout) to `~/.config/vdwrc` if the file is missing | Ctrl+Meta+D keeps doing what the bash script did; `/etc/xdg` defaults are not read because vdwrc is opened with SimpleConfig. User accepted |
 | 25 | 2026-10-17 | Retire `setup-workspace.sh`: delete it from the repo, migration steps remove the old shortcut, `.desktop` file and script | Both cannot own Ctrl+Meta+D. User accepted |
+| 26 | 2026-10-17 | Supersedes 9 and the OSD parts of 2 and 19. Confirm only by keeping Ctrl+Meta held and pressing D again, after a tap and after a menu pick; modifier release or the 2 s timeout cancels; already released modifiers cancel without a toast. Workspace shortcuts keep the timeout-only cancel | User decision after the first live test |
+| 27 | 2026-10-17 | Messages use our own layer-shell toast centered at the top of the screen instead of Plasma's OSD | Plasma's OSD position cannot be changed; user wants the toast at the top center |
 
 ## Open
 
