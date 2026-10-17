@@ -59,10 +59,14 @@ KCM.AbstractKCM {
                 id: captureName
                 Layout.preferredWidth: Kirigami.Units.gridUnit * 12
                 placeholderText: i18n("Name for the new workspace")
+                onAccepted: if (captureButton.enabled) captureButton.clicked()
             }
             QQC2.Button {
+                id: captureButton
                 icon.name: "camera-photo-symbolic"
                 text: i18n("Save current desktop as workspace")
+                // The daemon needs a name; an enabled button that only fails looks broken.
+                enabled: captureName.text.trim().length > 0
                 onClicked: kcm.captureCurrentDesktop(captureName.text)
             }
             QQC2.Button {
