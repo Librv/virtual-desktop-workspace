@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+project(s3fakepanel CXX)
+set(CMAKE_CXX_STANDARD 20)
+find_package(Qt6 REQUIRED COMPONENTS Gui)
+find_package(LayerShellQt REQUIRED)
+add_executable(fakepanel main.cpp)
+target_link_libraries(fakepanel Qt6::Gui LayerShellQt::Interface)
