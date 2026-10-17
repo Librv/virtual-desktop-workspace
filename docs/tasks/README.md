@@ -22,7 +22,7 @@ Status values: `todo`, `in-progress`, `blocked`, `done`.
 | T4a | Radial menu component | T1 | 1 | done |
 | T5 | KCM (System Settings page) | T1 | 1 | done |
 | T3b | Wire shortcuts, gesture machine, OSD and menu into vdwd | T2, T3a, T4a | 2 | done |
-| T6 | Save current desktop as workspace | T2 | 2, after T3b | todo |
+| T6 | Save current desktop as workspace | T2, T3b | 2 | in-progress |
 | T7 | Packaging, autostart, migrate off the bash script | all | 3 | todo |
 
 ## File ownership (no two parallel tasks touch the same file)
