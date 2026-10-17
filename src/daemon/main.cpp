@@ -19,6 +19,7 @@
 #include <QDBusConnection>
 #include <QFile>
 #include <QGuiApplication>
+#include <QQuickWindow>
 #include <QStandardPaths>
 
 namespace
@@ -51,6 +52,9 @@ int main(int argc, char *argv[])
     QGuiApplication::setApplicationName(QStringLiteral("vdw"));
     QGuiApplication::setOrganizationDomain(QStringLiteral("librv.github.io"));
     QGuiApplication::setQuitLockEnabled(false); // windowless daemon
+    // The GPU renderer keeps Mesa loaded after the first menu (about 35 MB more
+    // per process); the menu and toast are simple enough to draw on the CPU.
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Virtual Desktop Workspace daemon"));
