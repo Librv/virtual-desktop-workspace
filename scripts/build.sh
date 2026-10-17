@@ -9,8 +9,8 @@
 #   scripts/build.sh format    run clang-format on the C++ sources
 #   scripts/build.sh clean     delete build/dev, the next build configures again
 #   scripts/build.sh install   build and install the Arch package (asks for
-#                              sudo), then stop the running vdwd so the next
-#                              shortcut or vdwctl call starts the new one
+#                              sudo), then restart vdwd so the new binary
+#                              runs
 
 set -euo pipefail
 
@@ -29,8 +29,13 @@ case ${1:-build} in
     install)
         # -f: rebuild even when the package version did not change.
         (cd packaging/arch && makepkg -sif)
-        # The old daemon keeps running the old binary; D-Bus activation starts the new one.
-        pkill -x vdwd && echo "Stopped the old vdwd; the next Ctrl+Meta+D or vdwctl call starts the new one." || true
+        # The old daemon keeps running the old binary. The shortcut cannot start
+        # vdwd (kglobalaccel has no .desktop file for it), so a vdwctl call
+        # starts the new one through D-Bus activation.
+        if pkill -x vdwd; then
+            while pgrep -x vdwd >/dev/null; do sleep 0.1; done
+        fi
+        vdwctl list >/dev/null && echo "Started the new vdwd."
         ;;
     *)
         sed -n 's/^#   //p' "$0" >&2
