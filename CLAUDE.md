@@ -59,9 +59,13 @@ bounded work:
 Needs `extra-cmake-modules` and `ninja` installed.
 
 ```
-cmake --preset dev && cmake --build --preset dev && ctest --preset dev
-cmake --build --preset dev --target clang-format   # format C++ sources
+scripts/build.sh test     # configure if needed, build, run unit tests
+scripts/build.sh format   # format C++ sources
+scripts/build.sh clean    # wipe build/dev
 ```
+
+`scripts/build.sh install` (makepkg + pacman, needs sudo, restarts vdwd on the
+live session) is for the user only: suggest it, never run it.
 
 Nested KWin session (details and known gaps in `docs/spikes/T0b.md`):
 

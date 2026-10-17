@@ -33,17 +33,21 @@ Needs `extra-cmake-modules` and `ninja`, plus the KF6, Qt 6 and LayerShellQt
 development packages.
 
 ```
-cmake --preset dev && cmake --build --preset dev && ctest --preset dev
+scripts/build.sh          # build (configures on first run)
+scripts/build.sh test     # build and run the unit tests
 ```
+
+`scripts/build.sh help` lists the other commands (`format`, `clean`, `install`).
 
 ## Install (Arch, CachyOS)
 
 ```
-cd packaging/arch
-makepkg -si
+scripts/build.sh install
 ```
 
-This builds from the local checkout and installs `vdwd` and `vdwctl`, the D-Bus
+This runs `makepkg -sif` in `packaging/arch` (pacman asks for your password)
+and stops the running vdwd, so the next shortcut or `vdwctl` call starts the
+new build. Run it again after every change to reinstall. It builds from the local checkout and installs `vdwd` and `vdwctl`, the D-Bus
 service file, an XDG autostart entry and the System Settings page.
 
 ## First run
