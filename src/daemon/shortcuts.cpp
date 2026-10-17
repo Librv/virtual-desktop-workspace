@@ -33,15 +33,15 @@ Shortcuts::Shortcuts(QObject *parent)
     , m_modifierInfo(new KModifierKeyInfo(this))
 {
     connect(KGlobalAccel::self(), &KGlobalAccel::globalShortcutActiveChanged, this, [this](QAction *action, bool active) {
-        vdw::Shortcut shortcut;
+        Vdw::Shortcut shortcut;
         if (action == m_main) {
-            shortcut = vdw::Shortcut::main();
+            shortcut = Vdw::Shortcut::main();
         } else {
             const QString id = m_workspaces.key(action);
             if (id.isEmpty()) {
                 return;
             }
-            shortcut = vdw::Shortcut::workspace(id);
+            shortcut = Vdw::Shortcut::workspace(id);
         }
         qCInfo(VDW_DAEMON) << "shortcut" << action->objectName() << (active ? "pressed" : "released");
         if (active) {
@@ -166,7 +166,7 @@ void Shortcuts::sync(const Config &config)
     }
 }
 
-QKeySequence Shortcuts::sequence(const vdw::Shortcut &shortcut) const
+QKeySequence Shortcuts::sequence(const Vdw::Shortcut &shortcut) const
 {
     QAction *action = shortcut.isMain ? m_main : m_workspaces.value(shortcut.workspaceId);
     if (!action) {
@@ -178,7 +178,7 @@ QKeySequence Shortcuts::sequence(const vdw::Shortcut &shortcut) const
 
 void Shortcuts::updateModifiers()
 {
-    const QList<Qt::Key> keys = ShortcutKeys::modifierKeys(sequence(vdw::Shortcut::main()));
+    const QList<Qt::Key> keys = ShortcutKeys::modifierKeys(sequence(Vdw::Shortcut::main()));
     bool held = true; // a shortcut without modifiers never cancels a confirm
     for (const Qt::Key key : keys) {
         held = held && m_modifierInfo->isKeyPressed(key);

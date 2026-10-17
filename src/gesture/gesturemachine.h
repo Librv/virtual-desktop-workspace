@@ -5,7 +5,7 @@
 
 #include <optional>
 
-namespace vdw
+namespace Vdw
 {
 
 /// What a global shortcut is: the main shortcut, or one workspace's own shortcut.
@@ -126,4 +126,4 @@ private:
     bool m_modifiersCancel = false; ///< Confirm came from a tap of the main shortcut.
 };
 
-} // namespace vdw
+} // namespace Vdw

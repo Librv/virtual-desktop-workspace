@@ -20,9 +20,9 @@ Q_DECLARE_LOGGING_CATEGORY(VDW_DAEMON)
 namespace Vdw
 {
 
-vdw::Shortcut shortcutFromName(const QString &name)
+Vdw::Shortcut shortcutFromName(const QString &name)
 {
-    return name == QLatin1String("main") ? vdw::Shortcut::main() : vdw::Shortcut::workspace(name);
+    return name == QLatin1String("main") ? Vdw::Shortcut::main() : Vdw::Shortcut::workspace(name);
 }
 
 GestureController::GestureController(Manager *manager, Shortcuts *shortcuts, KWinScripts *scripts, RadialMenu *menu, QObject *parent)
@@ -42,25 +42,25 @@ GestureController::GestureController(Manager *manager, Shortcuts *shortcuts, KWi
 void GestureController::refreshConfig()
 {
     const Config &config = m_manager->config();
-    vdw::GestureConfig gesture;
+    Vdw::GestureConfig gesture;
     gesture.defaultWorkspaceId = config.defaultWorkspace();
     gesture.holdThresholdMs = config.holdThresholdMs();
     gesture.confirmTimeoutMs = config.confirmTimeoutMs();
     m_machine.setConfig(gesture);
 }
 
-void GestureController::press(const vdw::Shortcut &shortcut)
+void GestureController::press(const Vdw::Shortcut &shortcut)
 {
     m_lastPressed = shortcut;
     execute(m_machine.press(shortcut));
 }
 
-void GestureController::release(const vdw::Shortcut &shortcut)
+void GestureController::release(const Vdw::Shortcut &shortcut)
 {
     // Read before the commands run: they may hide the menu.
     const QString selected = m_menu->selectedId();
     execute(m_machine.release(shortcut));
-    if (m_machine.state() == vdw::GestureMachine::State::AwaitingMenuResult) {
+    if (m_machine.state() == Vdw::GestureMachine::State::AwaitingMenuResult) {
         // Empty (dead zone, or the menu is not up yet) cancels.
         execute(m_machine.menuResult(selected.isEmpty() ? std::nullopt : std::optional<QString>(selected)));
     }
@@ -71,16 +71,16 @@ void GestureController::setModifiersHeld(bool held)
     execute(m_machine.modifiersHeld(held));
 }
 
-void GestureController::execute(const vdw::Commands &commands)
+void GestureController::execute(const Vdw::Commands &commands)
 {
-    for (const vdw::Command &command : commands) {
+    for (const Vdw::Command &command : commands) {
         runCommand(command);
     }
 }
 
-void GestureController::runCommand(const vdw::Command &command)
+void GestureController::runCommand(const Vdw::Command &command)
 {
-    using Kind = vdw::Command::Kind;
+    using Kind = Vdw::Command::Kind;
     switch (command.kind) {
     case Kind::StartTimer:
         QTimer::singleShot(command.ms, this, [this, token = command.token] {
@@ -108,7 +108,7 @@ void GestureController::open(const QString &id, bool force)
     if (!force) {
         // Taps and menu picks are confirmed by the main shortcut, a workspace
         // shortcut by itself (the machine's confirm rule).
-        m_confirmShortcuts.insert(id, m_lastPressed.isMain ? vdw::Shortcut::main() : m_lastPressed);
+        m_confirmShortcuts.insert(id, m_lastPressed.isMain ? Vdw::Shortcut::main() : m_lastPressed);
         if (m_lastPressed.isMain && !m_manager->config().find(id)) {
             showNoDefaultOsd();
         }
@@ -158,9 +158,9 @@ void GestureController::showConfirmOsd(const QString &id)
     const QString name = workspace ? workspace->name : id;
     const QString icon = workspace && !workspace->icon.isEmpty() ? workspace->icon : QStringLiteral("virtual-desktops");
 
-    QString key = ShortcutKeys::keyText(m_shortcuts->sequence(m_confirmShortcuts.value(id, vdw::Shortcut::main())));
+    QString key = ShortcutKeys::keyText(m_shortcuts->sequence(m_confirmShortcuts.value(id, Vdw::Shortcut::main())));
     if (key.isEmpty()) {
-        key = ShortcutKeys::keyText(m_shortcuts->sequence(vdw::Shortcut::main()));
+        key = ShortcutKeys::keyText(m_shortcuts->sequence(Vdw::Shortcut::main()));
     }
     if (key.isEmpty()) {
         key = QStringLiteral("the shortcut");

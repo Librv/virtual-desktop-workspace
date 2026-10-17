@@ -2,7 +2,7 @@
 
 #include <QTest>
 
-using namespace vdw;
+using namespace Vdw;
 using K = Command::Kind;
 
 namespace

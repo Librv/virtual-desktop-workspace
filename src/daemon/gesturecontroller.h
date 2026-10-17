@@ -24,13 +24,13 @@ public:
     GestureController(Manager *manager, Shortcuts *shortcuts, KWinScripts *scripts, RadialMenu *menu, QObject *parent = nullptr);
 
     /// The three inputs; real shortcuts and the /Debug object use the same ones.
-    void press(const vdw::Shortcut &shortcut);
-    void release(const vdw::Shortcut &shortcut);
+    void press(const Vdw::Shortcut &shortcut);
+    void release(const Vdw::Shortcut &shortcut);
     void setModifiersHeld(bool held);
 
 private:
-    void execute(const vdw::Commands &commands);
-    void runCommand(const vdw::Command &command);
+    void execute(const Vdw::Commands &commands);
+    void runCommand(const Vdw::Command &command);
     void open(const QString &id, bool force);
     void showMenu();
     void hideMenu();
@@ -39,7 +39,7 @@ private:
     void showOsd(const QString &icon, const QString &text);
     void refreshConfig();
 
-    vdw::GestureMachine m_machine;
+    Vdw::GestureMachine m_machine;
     Manager *m_manager;
     Shortcuts *m_shortcuts;
     KWinScripts *m_scripts;
@@ -47,12 +47,12 @@ private:
     /// Bumped by every ShowMenu and HideMenu so that a slow cursor query
     /// never shows a menu the user has already released.
     int m_menuGeneration = 0;
-    vdw::Shortcut m_lastPressed;
+    Vdw::Shortcut m_lastPressed;
     /// The shortcut whose press confirms, by workspace id (set when Open(id, false) runs).
-    QHash<QString, vdw::Shortcut> m_confirmShortcuts;
+    QHash<QString, Vdw::Shortcut> m_confirmShortcuts;
 };
 
 /// The /Debug names of a shortcut: "main" or a workspace id.
-vdw::Shortcut shortcutFromName(const QString &name);
+Vdw::Shortcut shortcutFromName(const QString &name);
 
 }

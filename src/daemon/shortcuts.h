@@ -29,7 +29,7 @@ public:
     void sync(const Config &config);
 
     /// The current key sequence of `shortcut` (empty if none is set).
-    QKeySequence sequence(const vdw::Shortcut &shortcut) const;
+    QKeySequence sequence(const Vdw::Shortcut &shortcut) const;
 
     bool modifiersHeld() const
     {
@@ -37,8 +37,8 @@ public:
     }
 
 Q_SIGNALS:
-    void pressed(const vdw::Shortcut &shortcut);
-    void released(const vdw::Shortcut &shortcut);
+    void pressed(const Vdw::Shortcut &shortcut);
+    void released(const Vdw::Shortcut &shortcut);
     void modifiersHeldChanged(bool held);
 
 private:

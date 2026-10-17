@@ -1,6 +1,6 @@
 #include "gesturemachine.h"
 
-namespace vdw
+namespace Vdw
 {
 
 namespace
@@ -160,4 +160,4 @@ Commands GestureMachine::openResult(const QString &workspaceId, bool busy)
     return out;
 }
 
-} // namespace vdw
+} // namespace Vdw
