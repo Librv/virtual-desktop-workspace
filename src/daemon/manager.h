@@ -4,6 +4,7 @@
 #include "matcher.h"
 
 #include <QDBusContext>
+#include <QJsonArray>
 #include <QObject>
 #include <QRect>
 #include <QString>
@@ -54,6 +55,8 @@ Q_SIGNALS:
 
 private:
     void openWorkspace(const Workspace &workspace, bool force, const Reply &reply);
+    void capture(const QString &name, const Reply &reply);
+    QString saveCapture(const QString &name, const QRect &area, const QJsonArray &windows);
     void launchSlots(const Workspace &workspace, const QRect &area, const Reply &reply);
     void expirePending();
 

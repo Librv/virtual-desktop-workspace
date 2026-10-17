@@ -8,6 +8,13 @@ ecm_add_test(configtest.cpp
     LINK_LIBRARIES Qt6::Core Qt6::Test vdwcore
 )
 
+ecm_add_test(configwritertest.cpp
+    TEST_NAME configwritertest
+    LINK_LIBRARIES Qt6::Core Qt6::Test vdwcore
+)
+# The test uses plain string literals for brevity.
+target_compile_options(configwritertest PRIVATE -UQT_NO_CAST_FROM_ASCII -UQT_NO_CAST_TO_ASCII)
+
 ecm_add_test(layouttest.cpp
     TEST_NAME layouttest
     LINK_LIBRARIES Qt6::Core Qt6::Test vdwcore

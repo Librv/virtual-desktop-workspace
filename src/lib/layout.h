@@ -11,4 +11,8 @@ namespace Vdw::Layout
 /// touch are flush against each other with no gap or overlap.
 QRect slotRect(const QRect &area, const QRectF &fractions);
 
+/// The inverse: a window rect as fractions of `area` (which must not be
+/// empty), clamped to 0..1, with width and height at least one pixel's worth.
+QRectF fractionsOf(const QRect &area, const QRectF &rect);
+
 }

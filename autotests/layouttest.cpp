@@ -55,6 +55,26 @@ private Q_SLOTS:
         QCOMPARE(top.y() + top.height(), bottom.y());
         QCOMPARE(bottom.y() + bottom.height(), 777);
     }
+
+    void testFractionsOf()
+    {
+        const QRect area(0, 30, 1920, 1010);
+        QCOMPARE(Layout::fractionsOf(area, QRectF(0, 30, 960, 1010)), QRectF(0, 0, 0.5, 1));
+        // Round trip through the pixel rect.
+        const QRectF window(333, 77, 701, 513);
+        const QRect back = Layout::slotRect(area, Layout::fractionsOf(area, window));
+        QCOMPARE(back, QRect(333, 77, 701, 513));
+    }
+
+    void testFractionsOfClamps()
+    {
+        const QRect area(0, 30, 1000, 500);
+        // Sticks out left and bottom: cut to the area.
+        QCOMPARE(Layout::fractionsOf(area, QRectF(-100, 230, 600, 600)), QRectF(0, 0.4, 0.5, 0.6));
+        // Entirely outside: one pixel at the edge.
+        QCOMPARE(Layout::fractionsOf(area, QRectF(2000, 30, 100, 100)), QRectF(0.999, 0, 0.001, 0.2));
+        QCOMPARE(Layout::fractionsOf(area, QRectF(10, 30, 0, 0)), QRectF(0.01, 0, 0.001, 0.002));
+    }
 };
 
 QTEST_GUILESS_MAIN(LayoutTest)

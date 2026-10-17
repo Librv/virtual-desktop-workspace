@@ -4,7 +4,7 @@ find_package(KF6GlobalAccel ${KF_MIN_VERSION} REQUIRED)
 find_package(KF6GuiAddons ${KF_MIN_VERSION} REQUIRED)
 
 add_executable(vdwd main.cpp manager.cpp kwinscripts.cpp launcher.cpp shortcuts.cpp gesturecontroller.cpp)
-qt_add_resources(vdwd kwin PREFIX /kwin BASE kwin FILES kwin/placer.js kwin/empty.js kwin/area.js kwin/cursor.js)
+qt_add_resources(vdwd kwin PREFIX /kwin BASE kwin FILES kwin/placer.js kwin/empty.js kwin/area.js kwin/cursor.js kwin/list.js)
 target_link_libraries(vdwd PRIVATE vdwcore vdwgesture vdwmenu Qt6::Gui Qt6::DBus KF6::DBusAddons KF6::CoreAddons KF6::KIOGui KF6::Service KF6::GlobalAccel KF6::GuiAddons)
 install(TARGETS vdwd DESTINATION ${KDE_INSTALL_BINDIR})
 

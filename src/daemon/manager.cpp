@@ -1,16 +1,19 @@
 #include "manager.h"
 
+#include "configwriter.h"
 #include "gesturecontroller.h"
 #include "kwinscripts.h"
 #include "launcher.h"
 #include "layout.h"
 
 #include <KConfig>
+#include <KService>
 #include <KSharedConfig>
 
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDateTime>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLoggingCategory>
@@ -33,6 +36,26 @@ Config loadConfig(const QString &path)
         return Config::load(*shared);
     }
     return Config::load(KConfig(path, KConfig::SimpleConfig));
+}
+
+/// The usable area of the current desktop; `error` is empty on success.
+void queryArea(KWinScripts *scripts, const std::function<void(const QRect &area, const QString &error)> &callback)
+{
+    scripts->query(QStringLiteral("area"), [callback](const QJsonObject &area, const QString &error) {
+        if (!error.isEmpty()) {
+            callback({}, error);
+            return;
+        }
+        const QRect rect(area.value(QLatin1String("x")).toInt(),
+                         area.value(QLatin1String("y")).toInt(),
+                         area.value(QLatin1String("width")).toInt(),
+                         area.value(QLatin1String("height")).toInt());
+        if (rect.isEmpty()) {
+            callback({}, QStringLiteral("KWin reported an empty usable area"));
+            return;
+        }
+        callback(rect, QString());
+    });
 }
 }
 
@@ -110,17 +133,9 @@ void Manager::openWorkspace(const Workspace &workspace, bool force, const Reply 
             reply(QStringLiteral("busy"));
             return;
         }
-        m_scripts->query(QStringLiteral("area"), [this, workspace, force, reply](const QJsonObject &area, const QString &areaError) {
+        queryArea(m_scripts, [this, workspace, force, reply](const QRect &rect, const QString &areaError) {
             if (!areaError.isEmpty()) {
                 reply(QStringLiteral("error: ") + areaError);
-                return;
-            }
-            const QRect rect(area.value(QLatin1String("x")).toInt(),
-                             area.value(QLatin1String("y")).toInt(),
-                             area.value(QLatin1String("width")).toInt(),
-                             area.value(QLatin1String("height")).toInt());
-            if (rect.isEmpty()) {
-                reply(QStringLiteral("error: KWin reported an empty usable area"));
                 return;
             }
             launchSlots(workspace, rect, reply);
@@ -212,7 +227,91 @@ QString Manager::claimWindow(const QString &windowJson)
 QString Manager::CaptureCurrentDesktop(const QString &name)
 {
     qCInfo(VDW_DAEMON) << "CaptureCurrentDesktop" << name;
-    return QStringLiteral("error: not implemented"); // T6
+    if (name.trimmed().isEmpty()) {
+        return QStringLiteral("error: a name is required");
+    }
+
+    // The reply goes out once the KWin queries are answered and vdwrc is written.
+    setDelayedReply(true);
+    const QDBusMessage message = this->message();
+    const QDBusConnection connection = this->connection();
+    capture(name.trimmed(), [message, connection](const QString &result) {
+        qCInfo(VDW_DAEMON) << "CaptureCurrentDesktop reply" << result;
+        connection.send(message.createReply(result));
+    });
+    return QString();
+}
+
+void Manager::capture(const QString &name, const Reply &reply)
+{
+    queryArea(m_scripts, [this, name, reply](const QRect &area, const QString &areaError) {
+        if (!areaError.isEmpty()) {
+            reply(QStringLiteral("error: ") + areaError);
+            return;
+        }
+        m_scripts->query(QStringLiteral("list"), [this, name, area, reply](const QJsonObject &result, const QString &error) {
+            if (!error.isEmpty()) {
+                reply(QStringLiteral("error: ") + error);
+                return;
+            }
+            reply(saveCapture(name, area, result.value(QLatin1String("windows")).toArray()));
+        });
+    });
+}
+
+QString Manager::saveCapture(const QString &name, const QRect &area, const QJsonArray &windows)
+{
+    QList<Slot> slots;
+    QString icon;
+    for (const QJsonValue &value : windows) {
+        const QJsonObject window = value.toObject();
+        const QString appId = window.value(QLatin1String("desktopFileName")).toString();
+        const KService::Ptr service = appId.isEmpty() ? KService::Ptr() : KService::serviceByDesktopName(appId);
+        if (!service) {
+            qCInfo(VDW_DAEMON) << "capture skips" << window.value(QLatin1String("caption")).toString() << "class"
+                               << window.value(QLatin1String("resourceClass")).toString() << "(no known app:" << appId << ")";
+            continue;
+        }
+        const QRectF rect(window.value(QLatin1String("x")).toDouble(),
+                          window.value(QLatin1String("y")).toDouble(),
+                          window.value(QLatin1String("width")).toDouble(),
+                          window.value(QLatin1String("height")).toDouble());
+        if (slots.isEmpty()) {
+            icon = service->icon();
+        }
+        slots.append({service->desktopEntryName(), QString(), Layout::fractionsOf(area, rect)});
+    }
+    if (slots.isEmpty()) {
+        return QStringLiteral("error: no windows to capture");
+    }
+
+    // Start from what is on disk: the KCM may have saved since the last reload.
+    m_config = loadConfig(m_configPath);
+    QList<Workspace> workspaces = m_config.workspaces();
+    QStringList ids;
+    for (const Workspace &existing : std::as_const(workspaces)) {
+        ids << existing.id;
+    }
+    Workspace workspace;
+    workspace.id = ConfigWriter::slugFromName(name, ids);
+    workspace.name = name;
+    workspace.icon = icon;
+    workspace.order = workspaces.size();
+    workspace.slots = slots;
+    workspaces.append(workspace);
+
+    const QStringList problems = ConfigWriter::validate(workspaces, m_config.defaultWorkspace());
+    if (!problems.isEmpty()) {
+        return QStringLiteral("error: ") + problems.first();
+    }
+    KConfig file(m_configPath.isEmpty() ? QStringLiteral("vdwrc") : m_configPath, KConfig::SimpleConfig);
+    ConfigWriter::write(file, workspaces, m_config.defaultWorkspace());
+    if (!file.sync()) {
+        return QStringLiteral("error: cannot write the config file");
+    }
+    qCInfo(VDW_DAEMON) << "captured" << slots.size() << "windows as" << workspace.id;
+    ReloadConfig();
+    return workspace.id;
 }
 
 void Manager::ReloadConfig()

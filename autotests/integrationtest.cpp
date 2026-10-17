@@ -550,6 +550,67 @@ private Q_SLOTS:
         QTRY_VERIFY_WITH_TIMEOUT(oneWindowFillsArea(), 20000);
         QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
     }
+
+    // ---- capture (T6) ----
+
+    void testCaptureErrors()
+    {
+        QVERIFY(closeAll());
+        Result r = ctl({QStringLiteral("capture"), QStringLiteral("")});
+        QCOMPARE(r.out, QStringLiteral("error: a name is required"));
+        QCOMPARE(r.exitCode, 1);
+        r = ctl({QStringLiteral("capture"), QStringLiteral("   ")});
+        QCOMPARE(r.out, QStringLiteral("error: a name is required"));
+        r = ctl({QStringLiteral("capture"), QStringLiteral("Nothing")});
+        QCOMPARE(r.out, QStringLiteral("error: no windows to capture"));
+        QCOMPARE(r.exitCode, 1);
+    }
+
+    // Open "two" (3 Konsoles), capture it, close everything, open the
+    // captured workspace: the windows land where the originals were.
+    void testCaptureRoundTrip()
+    {
+        QVERIFY(closeAll());
+        QCOMPARE(ctl({QStringLiteral("open"), QStringLiteral("two")}).out, QStringLiteral("opened"));
+        QTRY_VERIFY_WITH_TIMEOUT(windowsAtSlots(1, 3), 20000);
+        QTest::qWait(1000);
+        const Snapshot before = snapshot();
+
+        const Result captured = ctl({QStringLiteral("capture"), QStringLiteral("Captured")});
+        QCOMPARE(captured.exitCode, 0);
+        QCOMPARE(captured.out, QStringLiteral("captured"));
+
+        // The new workspace is in the list, after the others, with the icon of
+        // the first slot's app and three slots.
+        const QJsonArray list = QJsonDocument::fromJson(ctl({QStringLiteral("list")}).out.toUtf8()).array();
+        QCOMPARE(list.size(), 3);
+        const QJsonObject added = list.last().toObject();
+        QCOMPARE(added[QStringLiteral("id")].toString(), QStringLiteral("captured"));
+        QCOMPARE(added[QStringLiteral("name")].toString(), QStringLiteral("Captured"));
+        QVERIFY(!added[QStringLiteral("icon")].toString().isEmpty());
+        QCOMPARE(added[QStringLiteral("slots")].toArray().size(), 3);
+
+        // A second capture with the same name gets a unique id.
+        QCOMPARE(ctl({QStringLiteral("capture"), QStringLiteral("Captured")}).out, QStringLiteral("captured-2"));
+
+        QVERIFY(closeAll());
+        QCOMPARE(ctl({QStringLiteral("open"), QStringLiteral("captured")}).out, QStringLiteral("opened"));
+        QTRY_VERIFY_WITH_TIMEOUT(snapshot().windows.size() == 3, 20000);
+        QTest::qWait(1500);
+        QList<Window> free = snapshot().windows;
+        QCOMPARE(free.size(), 3);
+        for (const Window &w : before.windows) {
+            bool found = false;
+            for (int i = 0; i < free.size(); ++i) {
+                if (near(free[i].rect, w.rect)) {
+                    free.removeAt(i);
+                    found = true;
+                    break;
+                }
+            }
+            QVERIFY2(found, qPrintable(QStringLiteral("no window near %1,%2 %3x%4").arg(w.rect.x()).arg(w.rect.y()).arg(w.rect.width()).arg(w.rect.height())));
+        }
+    }
 };
 
 QTEST_GUILESS_MAIN(IntegrationTest)
