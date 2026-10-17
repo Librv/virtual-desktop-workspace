@@ -28,6 +28,15 @@ add_subdirectory(src/lib)
 add_subdirectory(src/daemon)
 add_subdirectory(src/vdwctl)
 
+# Self-contained parts built in parallel tasks (T3a, T4a, T5). Each directory
+# finds its own packages and registers its own tests, so parallel work never
+# edits this file.
+foreach(part gesture menu kcm)
+    if(EXISTS ${CMAKE_SOURCE_DIR}/src/${part}/CMakeLists.txt)
+        add_subdirectory(src/${part})
+    endif()
+endforeach()
+
 if(BUILD_TESTING)
     add_subdirectory(autotests)
 endif()
