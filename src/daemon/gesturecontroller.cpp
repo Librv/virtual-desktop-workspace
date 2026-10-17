@@ -5,14 +5,13 @@
 
 #include "kwinscripts.h"
 #include "manager.h"
-#include "radialmenu.h"
 #include "shortcutkeys.h"
 #include "shortcuts.h"
-#include "toast.h"
+#include "uiclient.h"
 
-#include <QGuiApplication>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QLoggingCategory>
-#include <QScreen>
 #include <QTimer>
 
 Q_DECLARE_LOGGING_CATEGORY(VDW_DAEMON)
@@ -20,18 +19,42 @@ Q_DECLARE_LOGGING_CATEGORY(VDW_DAEMON)
 namespace Vdw
 {
 
+namespace
+{
+int modifierMask(const QKeySequence &sequence)
+{
+    int mask = 0;
+    for (const Qt::Key key : ShortcutKeys::modifierKeys(sequence)) {
+        switch (key) {
+        case Qt::Key_Control:
+            mask |= Qt::ControlModifier;
+            break;
+        case Qt::Key_Meta:
+            mask |= Qt::MetaModifier;
+            break;
+        case Qt::Key_Shift:
+            mask |= Qt::ShiftModifier;
+            break;
+        default:
+            mask |= Qt::AltModifier;
+            break;
+        }
+    }
+    return mask;
+}
+}
+
 Vdw::Shortcut shortcutFromName(const QString &name)
 {
     return name == QLatin1String("main") ? Vdw::Shortcut::main() : Vdw::Shortcut::workspace(name);
 }
 
-GestureController::GestureController(Manager *manager, Shortcuts *shortcuts, KWinScripts *scripts, RadialMenu *menu, Toast *toast, QObject *parent)
+GestureController::GestureController(Manager *manager, Shortcuts *shortcuts, KWinScripts *scripts, UiClient *ui, QObject *parent)
     : QObject(parent)
     , m_manager(manager)
     , m_shortcuts(shortcuts)
     , m_scripts(scripts)
-    , m_menu(menu)
-    , m_toast(toast)
+    , m_ui(ui)
     , m_toastTimer(new QTimer(this))
 {
     m_toastTimer->setSingleShot(true);
@@ -39,9 +62,16 @@ GestureController::GestureController(Manager *manager, Shortcuts *shortcuts, KWi
     connect(m_toastTimer, &QTimer::timeout, this, &GestureController::hideToast);
     refreshConfig();
     connect(m_manager, &Manager::configReloaded, this, &GestureController::refreshConfig);
-    connect(m_shortcuts, &Shortcuts::pressed, this, &GestureController::press);
+    connect(m_shortcuts, &Shortcuts::pressed, this, [this](const Vdw::Shortcut &shortcut) {
+        m_debugModifiers = false; // a real key press: the helper is the truth again
+        press(shortcut);
+    });
     connect(m_shortcuts, &Shortcuts::released, this, &GestureController::release);
-    connect(m_shortcuts, &Shortcuts::modifiersHeldChanged, this, &GestureController::setModifiersHeld);
+    connect(m_ui, &UiClient::modifiersHeldChanged, this, [this](bool held) {
+        if (!m_debugModifiers) {
+            setModifiersHeld(held);
+        }
+    });
 }
 
 void GestureController::refreshConfig()
@@ -56,18 +86,32 @@ void GestureController::refreshConfig()
 
 void GestureController::press(const Vdw::Shortcut &shortcut)
 {
+    if (shortcut.isMain) {
+        // Up before the hold threshold, and tracking modifiers for the whole gesture.
+        m_ui->trackModifiers(modifierMask(m_shortcuts->sequence(shortcut)));
+    }
     execute(m_machine.press(shortcut));
 }
 
 void GestureController::release(const Vdw::Shortcut &shortcut)
 {
-    // Read before the commands run: they may hide the menu.
-    const QString selected = m_menu->selectedId();
+    // Asked before the commands run: they may hide the menu, and the helper
+    // handles lines in order.
+    const int sequence = ++m_releaseSequence;
+    m_ui->select([this, sequence](const QString &selected) {
+        // Another release or a state change meanwhile: this answer is stale.
+        if (sequence == m_releaseSequence && m_machine.state() == Vdw::GestureMachine::State::AwaitingMenuResult) {
+            // Empty (dead zone, or the menu is not up yet) cancels.
+            execute(m_machine.menuResult(selected.isEmpty() ? std::nullopt : std::optional<QString>(selected)));
+        }
+    });
     execute(m_machine.release(shortcut));
-    if (m_machine.state() == Vdw::GestureMachine::State::AwaitingMenuResult) {
-        // Empty (dead zone, or the menu is not up yet) cancels.
-        execute(m_machine.menuResult(selected.isEmpty() ? std::nullopt : std::optional<QString>(selected)));
-    }
+}
+
+void GestureController::debugSetModifiersHeld(bool held)
+{
+    m_debugModifiers = true;
+    setModifiersHeld(held);
 }
 
 void GestureController::setModifiersHeld(bool held)
@@ -80,6 +124,7 @@ void GestureController::execute(const Vdw::Commands &commands)
     for (const Vdw::Command &command : commands) {
         runCommand(command);
     }
+    m_ui->setGestureActive(m_machine.state() != Vdw::GestureMachine::State::Idle);
 }
 
 void GestureController::runCommand(const Vdw::Command &command)
@@ -131,28 +176,27 @@ void GestureController::showMenu()
         if (generation != m_menuGeneration) {
             return; // released (or hidden) while KWin was answering
         }
-        QPoint center;
+        QPoint center(-1, -1); // the helper centers it on the screen
         if (error.isEmpty()) {
             center = QPoint(cursor.value(QLatin1String("x")).toInt(), cursor.value(QLatin1String("y")).toInt());
         } else {
             qCWarning(VDW_DAEMON) << "gesture: no cursor position:" << error;
-            if (const QScreen *screen = QGuiApplication::primaryScreen()) {
-                center = screen->geometry().center();
-            }
         }
-        QVector<RadialMenu::Item> items;
+        QJsonArray items;
         for (const Workspace &workspace : m_manager->config().workspaces()) {
-            items.append({workspace.id, workspace.name, workspace.icon.isEmpty() ? QStringLiteral("virtual-desktops") : workspace.icon});
+            items.append(QJsonObject{{QStringLiteral("id"), workspace.id},
+                                     {QStringLiteral("name"), workspace.name},
+                                     {QStringLiteral("icon"), workspace.icon.isEmpty() ? QStringLiteral("virtual-desktops") : workspace.icon}});
         }
         qCInfo(VDW_DAEMON) << "gesture: show menu at" << center << "with" << items.size() << "workspaces";
-        m_menu->show(center, items);
+        m_ui->showMenu(center, items);
     });
 }
 
 void GestureController::hideMenu()
 {
     ++m_menuGeneration;
-    m_menu->hide();
+    m_ui->hideMenu();
 }
 
 void GestureController::showConfirmToast(const QString &id)
@@ -188,13 +232,13 @@ void GestureController::showToast(const QString &icon, const QString &text)
 {
     qCInfo(VDW_DAEMON) << "gesture: toast" << text;
     m_toastTimer->stop();
-    m_toast->show(icon, text);
+    m_ui->showToast(icon, text);
 }
 
 void GestureController::hideToast()
 {
     m_toastTimer->stop();
-    m_toast->hide();
+    m_ui->hideToast();
 }
 
 }

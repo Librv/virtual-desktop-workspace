@@ -43,8 +43,9 @@ ecm_add_test(integrationtest.cpp
 )
 target_compile_definitions(integrationtest PRIVATE
     VDWD_PATH="$<TARGET_FILE:vdwd>"
+    VDWUI_PATH="$<TARGET_FILE:vdw-ui>"
     VDWCTL_PATH="$<TARGET_FILE:vdwctl>"
     S1INJECT_PATH="${CMAKE_SOURCE_DIR}/spikes/S1/build/s1inject"
     S2FAKEINPUT_PATH="${CMAKE_SOURCE_DIR}/spikes/S2/build/s2-fakeinput"
 )
-add_dependencies(integrationtest vdwd vdwctl)
+add_dependencies(integrationtest vdwd vdw-ui vdwctl)

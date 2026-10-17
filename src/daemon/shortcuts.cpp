@@ -6,7 +6,6 @@
 #include "shortcutkeys.h"
 
 #include <KGlobalAccel>
-#include <KModifierKeyInfo>
 
 #include <QAction>
 #include <QDBusConnection>
@@ -33,7 +32,6 @@ const QKeySequence mainDefault(Qt::CTRL | Qt::META | Qt::Key_D);
 
 Shortcuts::Shortcuts(QObject *parent)
     : QObject(parent)
-    , m_modifierInfo(new KModifierKeyInfo(this))
 {
     connect(KGlobalAccel::self(), &KGlobalAccel::globalShortcutActiveChanged, this, [this](QAction *action, bool active) {
         Vdw::Shortcut shortcut;
@@ -53,14 +51,6 @@ Shortcuts::Shortcuts(QObject *parent)
             Q_EMIT released(shortcut);
         }
     });
-    // The modifiers to watch come from the main shortcut's current sequence,
-    // which the user can change in System Settings.
-    connect(KGlobalAccel::self(), &KGlobalAccel::globalShortcutChanged, this, [this](QAction *action, const QKeySequence &) {
-        if (action == m_main) {
-            updateModifiers();
-        }
-    });
-    connect(m_modifierInfo, &KModifierKeyInfo::keyPressed, this, &Shortcuts::updateModifiers);
 }
 
 QAction *Shortcuts::registerAction(const QString &name, const QString &text, const QKeySequence &defaultKey)
@@ -128,7 +118,6 @@ void Shortcuts::sync(const Config &config)
 {
     if (!m_main) {
         m_main = registerAction(mainName, QStringLiteral("Open default workspace, hold for the workspace menu"), mainDefault);
-        updateModifiers();
         removeStaleActions();
     }
 
@@ -177,19 +166,6 @@ QKeySequence Shortcuts::sequence(const Vdw::Shortcut &shortcut) const
     }
     const QList<QKeySequence> keys = KGlobalAccel::self()->shortcut(action);
     return keys.isEmpty() ? QKeySequence() : keys.first();
-}
-
-void Shortcuts::updateModifiers()
-{
-    const QList<Qt::Key> keys = ShortcutKeys::modifierKeys(sequence(Vdw::Shortcut::main()));
-    bool held = true; // a shortcut without modifiers never cancels a confirm
-    for (const Qt::Key key : keys) {
-        held = held && m_modifierInfo->isKeyPressed(key);
-    }
-    if (held != m_modifiersHeld) {
-        m_modifiersHeld = held;
-        Q_EMIT modifiersHeldChanged(held);
-    }
 }
 
 }

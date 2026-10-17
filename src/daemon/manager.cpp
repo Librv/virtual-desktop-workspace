@@ -374,7 +374,7 @@ void DebugApi::Release(const QString &shortcut)
 void DebugApi::ModifiersHeld(bool held)
 {
     qCInfo(VDW_DAEMON) << "Debug ModifiersHeld" << held;
-    m_controller->setModifiersHeld(held);
+    m_controller->debugSetModifiersHeld(held);
 }
 
 } // namespace Vdw

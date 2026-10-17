@@ -6,9 +6,8 @@
 #include "kwinscripts.h"
 #include "launcher.h"
 #include "manager.h"
-#include "radialmenu.h"
 #include "shortcuts.h"
-#include "toast.h"
+#include "uiclient.h"
 
 #include "configwriter.h"
 
@@ -19,7 +18,6 @@
 #include <QDBusConnection>
 #include <QFile>
 #include <QGuiApplication>
-#include <QQuickWindow>
 #include <QStandardPaths>
 
 namespace
@@ -52,9 +50,6 @@ int main(int argc, char *argv[])
     QGuiApplication::setApplicationName(QStringLiteral("vdw"));
     QGuiApplication::setOrganizationDomain(QStringLiteral("librv.github.io"));
     QGuiApplication::setQuitLockEnabled(false); // windowless daemon
-    // The GPU renderer keeps Mesa loaded after the first menu (about 35 MB more
-    // per process); the menu and toast are simple enough to draw on the CPU.
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Virtual Desktop Workspace daemon"));
@@ -70,13 +65,12 @@ int main(int argc, char *argv[])
     }
 
     Vdw::KWinScripts scripts;
-    Vdw::Launcher launcher;
+    Vdw::UiClient ui;
+    Vdw::Launcher launcher(&ui);
     Vdw::Manager manager(parser.value(configOption), &scripts, &launcher);
     Vdw::ScriptApi script(&manager, &scripts);
     Vdw::Shortcuts shortcuts;
-    RadialMenu menu;
-    Toast toast;
-    Vdw::GestureController controller(&manager, &shortcuts, &scripts, &menu, &toast);
+    Vdw::GestureController controller(&manager, &shortcuts, &scripts, &ui);
     Vdw::DebugApi debug(&controller);
 
     QDBusConnection bus = QDBusConnection::sessionBus();

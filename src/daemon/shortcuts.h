@@ -11,15 +11,13 @@
 #include <QObject>
 
 class QAction;
-class KModifierKeyInfo;
 
 namespace Vdw
 {
 
 /// The global shortcuts of component `vdw` in kglobalaccel: the main shortcut
 /// and one per workspace. Reports presses and releases (from
-/// globalShortcutActiveChanged only, S1) and whether every modifier of the
-/// main shortcut is held.
+/// globalShortcutActiveChanged only, S1).
 class Shortcuts : public QObject
 {
     Q_OBJECT
@@ -37,18 +35,14 @@ public:
 Q_SIGNALS:
     void pressed(const Vdw::Shortcut &shortcut);
     void released(const Vdw::Shortcut &shortcut);
-    void modifiersHeldChanged(bool held);
 
 private:
     QAction *registerAction(const QString &name, const QString &text, const QKeySequence &defaultKey);
     void removeStaleActions();
     void renameAction(const QString &name, const QString &text);
-    void updateModifiers();
 
     QAction *m_main = nullptr;
     QHash<QString, QAction *> m_workspaces; ///< by workspace id
-    KModifierKeyInfo *m_modifierInfo = nullptr;
-    bool m_modifiersHeld = false;
 };
 
 }
