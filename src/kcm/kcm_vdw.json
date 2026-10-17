@@ -1,0 +1,11 @@
+{
+    "KPlugin": {
+        "Description": "Workspaces: saved sets of apps opened at saved positions",
+        "Icon": "preferences-desktop-virtual",
+        "Id": "kcm_vdw",
+        "Name": "Virtual Desktop Workspaces"
+    },
+    "X-KDE-Keywords": "workspace,virtual desktop,windows,layout",
+    "X-KDE-System-Settings-Parent-Category": "workspace",
+    "X-KDE-Weight": 60
+}
