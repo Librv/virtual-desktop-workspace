@@ -17,11 +17,11 @@ Status values: `todo`, `in-progress`, `blocked`, `done`.
 | S3 | Spike: KWin script placement via events | T0b | | done |
 | S4 | Spike: launching and window matching | T0b | | done |
 | T1 | Daemon skeleton, config, D-Bus API, vdwctl | S1, S3 | | done |
-| T2 | Launch and placement engine (daemon core) | T1 | 1 | in-progress |
+| T2 | Launch and placement engine (daemon core) | T1 | 1 | done |
 | T3a | Gesture state machine library | T1 | 1 | done |
 | T4a | Radial menu component | T1 | 1 | done |
 | T5 | KCM (System Settings page) | T1 | 1 | done |
-| T3b | Wire shortcuts, gesture machine, OSD and menu into vdwd | T2, T3a, T4a | 2 | todo |
+| T3b | Wire shortcuts, gesture machine, OSD and menu into vdwd | T2, T3a, T4a | 2 | in-progress |
 | T6 | Save current desktop as workspace | T2 | 2, after T3b | todo |
 | T7 | Packaging, autostart, migrate off the bash script | all | 3 | todo |
 
