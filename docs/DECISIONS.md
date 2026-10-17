@@ -34,6 +34,7 @@ rewrite old entries, add a new one that supersedes them.
 | 27 | 2026-10-17 | Messages use our own layer-shell toast centered at the top of the screen instead of Plasma's OSD | Plasma's OSD position cannot be changed; user wants the toast at the top center |
 | 28 | 2026-10-17 | KCM save first merges workspaces that appeared in `vdwrc` since its last load or save (e.g. `vdwctl capture`); workspaces deleted in the KCM stay deleted. The placer no longer reports `WindowPlaced` | Saving dropped captures made while the KCM was open (and their shortcuts); `WindowPlaced` was only logged (audit) |
 | 29 | 2026-10-17 | Capture leaves out the windows of the D-Bus caller's process (System Settings, `kcmshell6`); `vdwctl capture` keeps the terminal it runs in | The settings window was saved as a slot of every workspace captured from the KCM. User request |
+| 30 | 2026-10-17 | The workspace placement preview (KCM only) draws slots on a mini screen at the current screen's aspect ratio, one fixed color per slot, not from the window palette | Screen size is not stored, only fractions. Palette colors dim when System Settings is unfocused. User does not want it in the radial menu |
 
 ## Open
 

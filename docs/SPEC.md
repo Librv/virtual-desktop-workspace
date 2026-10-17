@@ -18,6 +18,9 @@ for now).
 A **workspace** is a named, saved layout, for example "3 Konsoles":
 
 - a name and an optional icon
+- the System Settings page shows a pager-style preview of the placement: a
+  mini screen with one rectangle per app, each in its own color, with its icon;
+  the app's entry in the list has a border in the same color
 - an optional shortcut of its own
 - a list of apps, each with:
   - the app (its `.desktop` file id, e.g. `org.kde.konsole`)

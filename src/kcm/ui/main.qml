@@ -225,40 +225,58 @@ KCM.AbstractKCM {
                 width: parent.width
                 spacing: Kirigami.Units.largeSpacing
 
-                Kirigami.FormLayout {
+                GridLayout {
                     Layout.fillWidth: true
-                    enabled: root.current !== null
+                    // Form beside the preview when wide enough, else stacked.
+                    columns: width > Kirigami.Units.gridUnit * 32 ? 2 : 1
+                    columnSpacing: Kirigami.Units.largeSpacing
 
-                    QQC2.TextField {
-                        id: nameField
-                        Kirigami.FormData.label: i18n("Name:")
-                        text: root.current ? root.current.wsName : ""
-                        onTextEdited: root.workspaces.setName(root.row, text)
-                    }
-                    RowLayout {
-                        Kirigami.FormData.label: i18n("Icon:")
-                        Kirigami.Icon {
-                            source: iconField.text || "window-duplicate"
-                            implicitWidth: Kirigami.Units.iconSizes.medium
-                            implicitHeight: Kirigami.Units.iconSizes.medium
-                        }
+                    Kirigami.FormLayout {
+                        Layout.alignment: Qt.AlignTop | Qt.AlignLeft
+                        Layout.fillWidth: parent.columns === 1
+                        enabled: root.current !== null
+
                         QQC2.TextField {
-                            id: iconField
-                            text: root.current ? root.current.wsIcon : ""
-                            placeholderText: i18n("Icon theme name")
-                            onTextEdited: root.workspaces.setIcon(root.row, text)
+                            id: nameField
+                            Kirigami.FormData.label: i18n("Name:")
+                            text: root.current ? root.current.wsName : ""
+                            onTextEdited: root.workspaces.setName(root.row, text)
+                        }
+                        RowLayout {
+                            Kirigami.FormData.label: i18n("Icon:")
+                            Kirigami.Icon {
+                                source: iconField.text || "window-duplicate"
+                                implicitWidth: Kirigami.Units.iconSizes.medium
+                                implicitHeight: Kirigami.Units.iconSizes.medium
+                            }
+                            QQC2.TextField {
+                                id: iconField
+                                text: root.current ? root.current.wsIcon : ""
+                                placeholderText: i18n("Icon theme name")
+                                onTextEdited: root.workspaces.setIcon(root.row, text)
+                            }
+                        }
+                        QQC2.CheckBox {
+                            Kirigami.FormData.label: i18n("Default:")
+                            text: i18n("Open this workspace on a short press")
+                            checked: root.current ? root.current.isDefault : false
+                            onToggled: root.workspaces.setDefaultRow(checked ? root.row : -1)
+                        }
+                        QQC2.Label {
+                            Kirigami.FormData.label: i18n("Id:")
+                            text: root.current ? root.current.wsId : ""
+                            opacity: 0.7
                         }
                     }
-                    QQC2.CheckBox {
-                        Kirigami.FormData.label: i18n("Default:")
-                        text: i18n("Open this workspace on a short press")
-                        checked: root.current ? root.current.isDefault : false
-                        onToggled: root.workspaces.setDefaultRow(checked ? root.row : -1)
-                    }
-                    QQC2.Label {
-                        Kirigami.FormData.label: i18n("Id:")
-                        text: root.current ? root.current.wsId : ""
-                        opacity: 0.7
+
+                    WindowPreview {
+                        id: preview
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 8
+                        Layout.preferredHeight: Math.max(Kirigami.Units.gridUnit * 6, Math.min(Kirigami.Units.gridUnit * 12, width / aspect))
+                        visible: root.current !== null
+                        model: kcm.slots
+                        iconFor: row => kcm.appInfo(row.app).icon
                     }
                 }
 
@@ -283,6 +301,16 @@ KCM.AbstractKCM {
 
                         Layout.fillWidth: true
                         readonly property var info: kcm.appInfo(app)
+
+                        // Same color as this app's rectangle in the preview.
+                        Rectangle {
+                            anchors.fill: parent
+                            z: 1
+                            color: "transparent"
+                            radius: Kirigami.Units.cornerRadius
+                            border.width: 1
+                            border.color: preview.colorFor(card.index)
+                        }
 
                         contentItem: RowLayout {
                             spacing: Kirigami.Units.largeSpacing
