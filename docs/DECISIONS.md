@@ -22,6 +22,8 @@ rewrite old entries, add a new one that supersedes them.
 | 15 | 2026-10-17 | Agent workflow follows the user's global rules: implementers do not commit, a reviewer pass before a task is done, design decisions stay with the coordinator or the user | User's CLAUDE.md |
 | 16 | 2026-10-17 | KWin scripts are started with `org.kde.kwin.Scripting.start()`, never `Script<id>.run` | KWin reuses script ids after an unload, so `run` by id can start the wrong script (found in T2) |
 | 17 | 2026-10-17 | `OpenWorkspace` also replies `busy` (unless forced) while launches from an earlier open are still pending | The desktop looks empty until the windows appear, so a quick double press would launch everything twice; the confirm flow covers the intentional case (T2) |
+| 18 | 2026-10-17 | On startup vdwd removes `open-<id>` shortcuts whose workspace no longer exists; `main` is never touched | A workspace deleted while the daemon was not running would otherwise leave a dead entry in System Settings (T3b review) |
+| 19 | 2026-10-17 | A tap with no usable default workspace shows an OSD hint instead of doing nothing | Silent failure is confusing; holding still opens the menu (T3b review) |
 
 ## Open
 

@@ -62,6 +62,9 @@ desktops are created.
 | Hold (still pressed after a short threshold, 250 ms, configurable) | Show the radial menu |
 | Tap D again while a confirm message is showing | Confirm |
 
+If no default workspace is set (or it was deleted), a tap shows a short
+on-screen hint instead; holding still opens the menu.
+
 Per-workspace shortcuts only support tap (and the same confirm flow); they
 never open the menu.
 
