@@ -611,6 +611,49 @@ private Q_SLOTS:
             QVERIFY2(found, qPrintable(QStringLiteral("no window near %1,%2 %3x%4").arg(w.rect.x()).arg(w.rect.y()).arg(w.rect.width()).arg(w.rect.height())));
         }
     }
+
+    // Runs last: replaces the daemon with one that has no vdwrc (in its own
+    // XDG_CONFIG_HOME) and checks the built-in starting workspace.
+    void testDefaultConfigOnFirstStart()
+    {
+        m_daemon->terminate();
+        QVERIFY(m_daemon->waitForFinished(5000));
+        auto *iface = QDBusConnection::sessionBus().interface();
+        QTRY_VERIFY_WITH_TIMEOUT(!iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")), 5000);
+
+        QTemporaryDir configHome;
+        QVERIFY(configHome.isValid());
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("XDG_CONFIG_HOME"), configHome.path());
+        m_daemon = std::make_unique<QProcess>();
+        m_daemon->setProcessChannelMode(QProcess::ForwardedChannels);
+        m_daemon->setProcessEnvironment(env);
+        m_daemon->start(QStringLiteral(VDWD_PATH), {});
+        QVERIFY(m_daemon->waitForStarted());
+        QTRY_VERIFY_WITH_TIMEOUT(iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")), 15000);
+
+        QVERIFY(QFileInfo::exists(configHome.filePath(QStringLiteral("vdwrc"))));
+        const Result r = ctl({QStringLiteral("list")});
+        QCOMPARE(r.exitCode, 0);
+        const QJsonArray array = QJsonDocument::fromJson(r.out.toUtf8()).array();
+        QCOMPARE(array.size(), 1);
+        const QJsonObject ws = array[0].toObject();
+        QCOMPARE(ws[QStringLiteral("id")].toString(), QStringLiteral("3-konsoles"));
+        QCOMPARE(ws[QStringLiteral("name")].toString(), QStringLiteral("3 Konsoles"));
+        QVERIFY(ws[QStringLiteral("isDefault")].toBool());
+        QCOMPARE(ws[QStringLiteral("slots")].toArray().size(), 3);
+        // The legacy layout: top-right, bottom-left, bottom-right quadrants.
+        const QJsonArray slots = ws[QStringLiteral("slots")].toArray();
+        const QList<QList<double>> expected = {{0.5, 0, 0.5, 0.5}, {0, 0.5, 0.5, 0.5}, {0.5, 0.5, 0.5, 0.5}};
+        for (int i = 0; i < 3; ++i) {
+            const QJsonObject slot = slots[i].toObject();
+            QCOMPARE(slot[QStringLiteral("app")].toString(), QStringLiteral("org.kde.konsole"));
+            const QJsonObject g = slot[QStringLiteral("geometry")].toObject();
+            const QList<double> actual = {g[QStringLiteral("x")].toDouble(), g[QStringLiteral("y")].toDouble(), g[QStringLiteral("width")].toDouble(),
+                                          g[QStringLiteral("height")].toDouble()};
+            QCOMPARE(actual, expected[i]);
+        }
+    }
 };
 
 QTEST_GUILESS_MAIN(IntegrationTest)

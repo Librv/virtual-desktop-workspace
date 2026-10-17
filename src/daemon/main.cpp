@@ -6,11 +6,39 @@
 #include "radialmenu.h"
 #include "shortcuts.h"
 
+#include "configwriter.h"
+
+#include <KConfig>
 #include <KDBusService>
 
 #include <QCommandLineParser>
 #include <QDBusConnection>
+#include <QFile>
 #include <QGuiApplication>
+#include <QStandardPaths>
+
+namespace
+{
+/// First start with the default config path: write the built-in "3 Konsoles"
+/// workspace (the legacy layout) unless `vdwrc` already exists.
+void writeDefaultConfigIfMissing()
+{
+    const QString path = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/vdwrc");
+    if (QFile::exists(path)) {
+        return;
+    }
+    Vdw::Workspace workspace;
+    workspace.id = QStringLiteral("3-konsoles");
+    workspace.name = QStringLiteral("3 Konsoles");
+    workspace.icon = QStringLiteral("utilities-terminal");
+    for (const QRectF &geometry : {QRectF(0.5, 0, 0.5, 0.5), QRectF(0, 0.5, 0.5, 0.5), QRectF(0.5, 0.5, 0.5, 0.5)}) {
+        workspace.slots.append({QStringLiteral("org.kde.konsole"), QString(), geometry});
+    }
+    KConfig config(path, KConfig::SimpleConfig);
+    Vdw::ConfigWriter::write(config, {workspace}, workspace.id);
+    config.sync();
+}
+}
 
 int main(int argc, char *argv[])
 {
@@ -28,6 +56,10 @@ int main(int argc, char *argv[])
     parser.addOption(configOption);
     parser.addOption(debugOption);
     parser.process(app);
+
+    if (!parser.isSet(configOption)) {
+        writeDefaultConfigIfMissing();
+    }
 
     Vdw::KWinScripts scripts;
     Vdw::Launcher launcher;

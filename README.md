@@ -1,57 +1,89 @@
 # Virtual Desktop Workspace
 
-Open and place a predefined set of apps on an empty virtual desktop, triggered by a
-global shortcut, on KDE Plasma 6 (Wayland).
+Open a saved set of apps at saved positions on the current virtual desktop, with
+a global shortcut or a radial menu. For KDE Plasma 6 on Wayland (single monitor).
 
-## Current behavior
+## What it does
 
-- Checks that the current virtual desktop has zero windows (including minimized ones)
-- If empty, launches 3 Konsole windows and places them as flush quadrants:
-  top-right, bottom-left, bottom-right (top-left intentionally left empty)
-- If not empty, launches nothing and shows a Plasma on-screen message ("Desktop not
-  empty. Tap D again to set up here."). Pressing the shortcut again within 2 seconds
-  on the same desktop sets up anyway: existing windows are left alone and the new
-  ones go into the same slots, even if they overlap. A later press shows the message
-  again. The pending request is kept in `$XDG_RUNTIME_DIR/setup-workspace-<uid>.pending`.
-- Panel-aware: uses KWin's own usable-area calculation, so placement never overlaps
-  the panel
-- Bound to a global shortcut via a `.desktop` file + KDE's Custom Shortcuts
+A workspace is a named layout: a list of apps (by `.desktop` id, with optional
+arguments) and a position and size for each, stored as fractions of the screen
+area not covered by panels. The background daemon `vdwd` opens a workspace on the
+current virtual desktop; nothing else is moved or closed.
 
-## Requirements
+- **Tap Ctrl+Meta+D:** open the default workspace.
+- **Hold Ctrl+Meta+D:** show the radial menu around the pointer. Move toward a
+  slice and release to open that workspace; release in the center to cancel.
+- **Confirm:** if the desktop already has windows, nothing launches yet and a
+  Plasma on-screen message asks you to tap D again (within 2 seconds) to set up
+  anyway. New windows go into their slots even if they overlap existing ones.
+- **Per-workspace shortcuts:** each workspace can have its own shortcut (tap only,
+  same confirm flow).
+- **Capture:** arrange real windows, then save the current desktop as a new
+  workspace (the "Save current desktop as workspace" button in the settings page,
+  or `vdwctl capture <name>`).
+- **Settings page:** System Settings, Virtual Desktop Workspaces. Add, reorder
+  and edit workspaces and their apps, pick the default, and configure shortcuts
+  (the same entries appear in System Settings, Shortcuts).
 
-- KDE Plasma 6, Wayland
-- [`kdotool`](https://github.com/jinliu/kdotool): drives KWin's scripting API over
-  D-Bus; not in official Arch/CachyOS repos, only the AUR (`kdotool-bin` is the
-  prebuilt package)
+Behavior details are in `docs/SPEC.md`, the design in `docs/ARCHITECTURE.md`.
 
-## Installation
+## Build
 
-```bash
-mkdir -p ~/.local/bin
-cp setup-workspace.sh ~/.local/bin/
-chmod +x ~/.local/bin/setup-workspace.sh
+Needs `extra-cmake-modules` and `ninja`, plus the KF6, Qt 6 and LayerShellQt
+development packages.
+
+```
+cmake --preset dev && cmake --build --preset dev && ctest --preset dev
 ```
 
-Bind it to a global shortcut via System Settings → Shortcuts → Custom Shortcuts
-(Command/URL), pointing at the full path above.
+## Install (Arch, CachyOS)
 
-## Known limitations
+```
+cd packaging/arch
+makepkg -si
+```
 
-- Shortcut registration goes through `kglobalaccel` via a `.desktop` file, which has
-  been unreliable in practice: it appears to cache the invoked command at
-  registration time rather than re-reading the `.desktop` file's `Exec=` on every
-  press, so changes sometimes require deleting and recreating the shortcut rather
-  than just editing the file. The planned daemon (see `docs/`) replaces this mechanism.
-- Only one hardcoded layout (3 Konsoles, 3 corners), not yet configurable.
-- On a busy desktop the confirm is a second press of the whole shortcut, handled by
-  a new script run; holding the modifiers is not required.
+This builds from the local checkout and installs `vdwd` and `vdwctl`, the D-Bus
+service file, an XDG autostart entry and the System Settings page.
+
+## First run
+
+Log out and in (or run `vdwd &` once). On the first start, if `~/.config/vdwrc`
+does not exist, vdwd writes a starting workspace "3 Konsoles" (three Konsole
+windows in the top-right, bottom-left and bottom-right quadrants) and makes it the
+default, so Ctrl+Meta+D works right away. An existing `vdwrc` is never touched.
+
+`vdwctl list` prints the workspaces as JSON; `vdwctl open <id> [--force]` opens one.
+A step by step check of the installed app is in `docs/LIVE-CHECKS.md`.
+
+## Uninstall
+
+```
+sudo pacman -R vdw
+```
+
+Your `~/.config/vdwrc` stays; delete it by hand if you want it gone.
+
+## Migrating from setup-workspace.sh
+
+The old bash script and vdwd cannot both own Ctrl+Meta+D. Before the first run:
+
+1. In System Settings, Shortcuts, Custom Shortcuts, remove the Meta+Ctrl+D entry
+   for the script.
+2. `rm ~/.local/share/applications/net.local.setup-workspace.sh.desktop`
+3. `rm ~/.local/bin/setup-workspace.sh`
+
+`kdotool` is no longer needed.
 
 ## Project layout
 
 ```
-setup-workspace.sh   # current implementation (legacy, replaced in T7)
-docs/                # spec, architecture, decisions, tasks
+src/lib/         config reading and writing, layout math (no GUI, no D-Bus)
+src/daemon/      vdwd: D-Bus API, launching, KWin scripts, shortcuts, gestures
+src/gesture/     tap/hold/confirm state machine
+src/menu/        radial menu overlay
+src/kcm/         System Settings page
+src/vdwctl/      command line client
+packaging/arch/  PKGBUILD
+docs/            spec, architecture, decisions, tasks, spikes
 ```
-
-Planned direction (daemon, per-workspace shortcuts, radial menu, System Settings
-page) is described in `docs/SPEC.md` and `docs/ARCHITECTURE.md`.

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Virtual Desktop Workspace
+Comment=Opens saved sets of apps on the current virtual desktop
+Exec=vdwd
+Icon=preferences-desktop-virtual
+NoDisplay=true
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2

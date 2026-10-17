@@ -10,3 +10,5 @@ install(TARGETS vdwd DESTINATION ${KDE_INSTALL_BINDIR})
 
 configure_file(io.github.librv.vdw.service.in ${CMAKE_CURRENT_BINARY_DIR}/io.github.librv.vdw.service @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/io.github.librv.vdw.service DESTINATION ${KDE_INSTALL_DBUSSERVICEDIR})
+
+install(FILES io.github.librv.vdw.autostart.desktop DESTINATION ${KDE_INSTALL_AUTOSTARTDIR} RENAME io.github.librv.vdw.desktop)

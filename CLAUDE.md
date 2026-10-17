@@ -46,8 +46,6 @@ bounded work:
   T0b). Live-session checks are written down as steps for the user.
 - Only change files inside this repo. Installing packages or touching
   `~/.config`, `~/.local` or other folders needs the user's OK.
-- `setup-workspace.sh` is the working legacy version. Keep it working until T7
-  replaces it.
 - Target: Plasma 6.7 / KWin 6.7, Qt 6, KF6, C++20, single monitor.
 
 ## Code style

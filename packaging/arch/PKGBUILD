@@ -1,0 +1,44 @@
+# Maintainer: Librv
+# Builds from the local checkout (two directories up), no download.
+# Install with `makepkg -si` from this directory.
+pkgname=vdw
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Open saved sets of apps at saved positions on the current virtual desktop (KDE Plasma 6)'
+arch=('x86_64')
+url='https://github.com/Librv/virtual-desktop-workspace'
+license=('MIT')
+depends=(
+    'kcmutils'
+    'kconfig'
+    'kcoreaddons'
+    'kdbusaddons'
+    'kguiaddons'
+    'kglobalaccel'
+    'ki18n'
+    'kio'
+    'kirigami'
+    'kservice'
+    'kwin'
+    'layer-shell-qt'
+    'qt6-base'
+    'qt6-declarative'
+    'qt6-wayland'
+)
+makedepends=('cmake' 'extra-cmake-modules' 'ninja')
+optdepends=('konsole: used by the starting "3 Konsoles" workspace')
+
+_srcdir="$(realpath "$startdir/../..")"
+
+build() {
+    cmake -S "$_srcdir" -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DBUILD_TESTING=OFF
+    cmake --build build
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+    install -Dm644 "$_srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
