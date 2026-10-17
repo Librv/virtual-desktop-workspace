@@ -22,6 +22,22 @@ the current virtual desktop, via global shortcuts and a radial menu.
 5. Set the task to `done` only when its acceptance criteria pass; say which
    ones were checked by hand and which need the user.
 
+## Agent workflow
+
+The coordinator (main session) plans, decides and integrates; subagents do
+bounded work:
+
+- `scout`: read-only searches and "how does X work" questions.
+- `implementer`: one task, or one well-scoped part of it, with the design
+  already decided in these docs. Implementers do not commit and do not make
+  design decisions: if the docs are ambiguous or wrong, they stop and report.
+  Never run two implementers on overlapping files; parallel implementers each
+  get their own git worktree.
+- `reviewer`: run on every finished task before it is marked done. The
+  coordinator commits after the review findings are handled.
+- Design questions go to the coordinator, and from there to the user when
+  they change behavior.
+
 ## Rules
 
 - Never use em-dashes (U+2014) anywhere: code, comments, docs, commits.
@@ -60,6 +76,12 @@ scripts/dev-session.sh stop
 ```
 
 The Claude Code sandbox blocks Unix sockets, so these only work when
-`scripts/dev-session.sh` runs outside it (see `docs/spikes/T0b.md`). Run each
-as a single command. Never point `kdotool`/`qdbus6` at the default bus: that
-is the live session.
+`scripts/dev-session.sh` runs outside it (`sandbox.excludedCommands` entry
+`scripts/dev-session.sh *`; see `docs/spikes/T0b.md`). Run each as a single
+command, not after `cd` or `&&`. Never point `kdotool`/`qdbus6` at the default
+bus: that is the live session.
+
+Several agents can run nested sessions at once: give each its own state dir,
+e.g. `VDW_DEV_DIR=/run/user/1000/vdw-<task> scripts/dev-session.sh start`.
+Fake key/pointer input and screenshots work in the nested session (see
+`docs/ARCHITECTURE.md`, Testing).

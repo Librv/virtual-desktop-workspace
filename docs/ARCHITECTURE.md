@@ -1,7 +1,7 @@
 # Architecture
 
-Target design. Parts marked *(spike)* depend on a spike in `docs/tasks/` and
-may change once its findings are written up in `docs/spikes/`.
+Target design, updated with the findings of spikes S1 to S4 (details and
+measurements in `docs/spikes/`).
 
 ## Why not keep the bash script
 
@@ -16,14 +16,14 @@ packaging task (T7) replaces it.
 ```
                  Ctrl+Meta+D press/release
   kglobalaccel  ───────────────────────────►  vdwd (daemon, C++/Qt6/KF6)
-                                               │  gesture state machine
+  KModifierKeyInfo ── Ctrl/Meta held ─────────►│  gesture state machine
                                                │  config (KConfig)
    Plasma OSD   ◄── "desktop not empty" ───────┤
                                                │
-   radial menu  ◄── show / hide / selection ───┤  (QML, LayerShellQt overlay)
+   radial menu  ◄── show / hide ───────────────┤  (QML, LayerShellQt overlay)
                                                │
-   KWin script  ◄── "place app X at rect R" ───┤  launches apps via
-   (in KWin)    ──► window opened / placed ───►│  KIO::ApplicationLauncherJob
+   KWin script  ──► ClaimWindow / results ────►│  launches apps via
+   (in KWin)    ◄── placement rect ────────────┤  KIO::ApplicationLauncherJob
                                                │
    vdwctl, KCM  ◄────────── D-Bus API ─────────┘
 ```
@@ -31,62 +31,148 @@ packaging task (T7) replaces it.
 ### vdwd: the daemon
 
 C++ / Qt 6 / KDE Frameworks 6, started at login via XDG autostart (or a
-systemd user unit).
+systemd user unit), plus a D-Bus `.service` file so a `callDBus` from the KWin
+script can start it.
 
-- **Shortcuts:** one `QAction` per shortcut registered with `KGlobalAccel`, so
-  they show up and are editable in System Settings, Shortcuts.
-  `KGlobalAccel::globalShortcutActiveChanged(QAction*, bool)` gives press and
-  release, which the gesture state machine needs.
-- **Gesture state machine:** pure logic, no Qt GUI, with an injectable clock so
-  it is unit-testable. States: idle, pressed (waiting for hold threshold),
-  menu open, awaiting confirm. Inputs: press, release, timer, menu selection,
-  emptiness result. Outputs: open workspace, show menu, hide menu, show OSD.
-- **Config:** KConfig file `~/.config/vdwrc` (exact schema decided in T1).
-- **Launching:** `KIO::ApplicationLauncherJob` from a `.desktop` id plus args.
+- **Shortcuts (S1):** one component `vdw` in KGlobalAccel, one `QAction` per
+  shortcut (main shortcut plus one per workspace), `setAutoRepeat(false)`,
+  registered with `setDefaultShortcut(..., NoAutoloading)` and
+  `setShortcut(..., Autoloading)` so edits made in System Settings survive
+  restarts. Never call `removeAllShortcuts` on exit (it deletes the user's
+  bindings).
+- **Gesture input (S1):** `KGlobalAccel::globalShortcutActiveChanged(QAction*,
+  bool)` only: true is press, false is release. The release fires when any key
+  of the chord goes up. `triggered` is ignored (auto-repeat only produces
+  `triggered`). Ctrl/Meta held state comes from `KModifierKeyInfo::keyPressed`
+  (works on Wayland via KWin's keystate protocol, 0 to 30 ms lag); the
+  modifier set is derived from the configured `QKeySequence`, not hard coded.
+  Never use kglobalaccel's `invokeShortcut` (press without release, swallows
+  the next real press).
+- **Gesture state machine (S1):** pure logic, no Qt GUI, injectable clock,
+  unit-tested. Inputs: press, release, modifiersHeld(bool), timer, menu
+  selection, emptiness result. Outputs: open workspace, show menu, hide menu,
+  show OSD. Rules are in `SPEC.md`; in short:
+  - idle: press starts the hold timer (250 ms).
+  - pressed: release before the timer is a tap; timer firing opens the menu.
+  - menu: release selects (dead zone = cancel).
+  - awaiting confirm (2 s timer): a new press of the same shortcut confirms.
+    In the tap path, modifiers going up also cancels immediately; in the menu
+    path only the timeout cancels (the user has usually let go of every key
+    when picking).
+  - Must tolerate release without press, press without release, and stale
+    timers (generation counters).
+- **Launching (S4):** `KIO::ApplicationLauncherJob` with a copy of the app's
+  `KService` whose `Exec` gets the slot's extra args appended. The pid is read
+  in the job's `result` handler. A windowless Qt app needs
+  `setQuitLockEnabled(false)` or it quits when the first job ends.
 - **OSD:** Plasma's on-screen display over D-Bus (`org.kde.plasmashell`,
-  `/org/kde/osdService`, `showText`).
-- **D-Bus API** (`org.kde.vdw` or similar, decided in T1): list workspaces,
-  open workspace, capture current desktop, reload config. Debug builds also
-  expose methods that inject gesture events, so tests can drive the state
-  machine without real key presses.
+  `/org/kde/osdService`, `org.kde.osdService.showText(icon, text)`).
 
-### KWin script
+### Config
 
-JavaScript KWin script shipped with the daemon and loaded through KWin's
-`org.kde.kwin.Scripting` D-Bus interface. It handles everything that needs to
-run inside the compositor:
+KConfig file `~/.config/vdwrc`. Shortcut keys are not stored here:
+KGlobalAccel owns them (component `vdw`, action `open-<id>` per workspace and
+`main` for the main shortcut).
 
-- report whether the current desktop has normal windows (the check the bash
-  script already does)
-- report the usable screen area (`workspace.clientArea(KWin.PlacementArea, ...)`)
-- on `workspace.windowAdded`, match new windows against pending placements and
-  set their geometry, then report back with `callDBus`
-- list the current desktop's windows with geometry and app id, for "Save
-  current desktop as workspace"
+```ini
+[General]
+DefaultWorkspace=3-konsoles
+HoldThresholdMs=250
+ConfirmTimeoutMs=2000
+PlacementTimeoutMs=10000
 
-This replaces polling with events. *(spike S3)*
+[Workspace][3-konsoles]
+Name=3 Konsoles
+Icon=utilities-terminal
+Order=0
 
-### Matching windows to launches
+[Workspace][3-konsoles][Slot][0]
+App=org.kde.konsole
+Args=
+Geometry=0.5,0,0.5,0.5
+```
 
-Matching by process id breaks for apps that reuse one process (Dolphin,
-Firefox, Konsole when "single process" is on). Plan: each launch adds a pending
-placement keyed by the app id (`desktopFileName` / resource class); new windows
-claim pending placements in launch order, with a timeout. *(spike S4)*
+- A workspace id is a stable slug (`[a-z0-9-]+`), used in D-Bus calls and
+  shortcut action names. `Name` is what the user sees.
+- `App` is a `.desktop` id. `Args` is one string split with
+  `KShell::splitArgs`.
+- `Geometry` is `x,y,width,height` as fractions (0 to 1) of the usable area
+  (`clientArea(PlacementArea, ...)`, so panels are excluded).
+- Slots are numbered from 0; workspaces are sorted by `Order`, then `Name`.
+- Invalid entries (unknown keys, bad geometry, missing `App`) are skipped with
+  a warning; the rest of the config still loads.
 
-### Radial menu
+### D-Bus API
+
+Service `io.github.librv.vdw`. All structured data is passed as JSON strings
+(KWin's `callDBus` handles strings and numbers well, complex types badly; JS
+numbers arrive as int32, so integer parameters are `i`).
+
+| Object / interface | Method | Purpose |
+|---|---|---|
+| `/Manager`, `io.github.librv.vdw.Manager` | `ListWorkspaces() -> s` | JSON array of `{id, name, icon, isDefault, slots}` |
+| | `OpenWorkspace(s id, b force) -> s` | `"opened"`, `"busy"` (desktop not empty and not forced), or `"error: ..."` |
+| | `CaptureCurrentDesktop(s name) -> s` | new workspace id, or `"error: ..."` (T6) |
+| | `ReloadConfig()` | re-read `vdwrc`, re-register shortcuts |
+| `/Script`, `io.github.librv.vdw.Script` | `ClaimWindow(s windowJson) -> s` | called by the KWin script on `windowAdded`; returns a rect JSON or `""` |
+| | `WindowPlaced(s json)` | script confirms a placement |
+| | `QueryResult(s requestId, s json)` | answers of one-shot query scripts |
+| | `CursorPos(i x, i y)` | pointer position for the radial menu center |
+| `/Debug`, `io.github.librv.vdw.Debug` | `Press()`, `Release()`, `ModifiersHeld(b)` | only when started with `--debug`: feed the state machine directly |
+
+### KWin script (S3)
+
+- **Long-lived placer script**, loaded at daemon startup through
+  `org.kde.kwin.Scripting` (`isScriptLoaded` then `unloadScript` then
+  `loadScript` then `run`, because loading a name that is still loaded
+  fails). On `workspace.windowAdded` it calls `ClaimWindow` with the window's
+  pid, `desktopFileName`, `resourceClass` and `internalId`. If a rect comes
+  back it sets `frameGeometry` (it sticks; no re-apply needed), waits for
+  `frameGeometryChanged` and calls `WindowPlaced`.
+- **One-shot query scripts** for the emptiness check, the usable area, the
+  window list (T6) and the cursor position: loaded, run, they answer through
+  `QueryResult`/`CursorPos`, then unloaded.
+- App windows are `normalWindow && minimizable` (plain `normalWindow` also
+  matches layer-shell surfaces, including our own radial menu). The emptiness
+  check additionally ignores vdwd's own windows.
+- No shortcut "doorbell" (`registerShortcut` persists in the user's shortcut
+  config) and no script config (`readConfig` does not see external writes).
+
+### Matching windows to launches (S4)
+
+The daemon owns the pending placements and decides; the script only reports.
+Matching is a pure, unit-tested class (launches and observed windows in,
+assignments out):
+
+1. pid match first (job pid equals window pid): exact for Konsole (normal
+   mode), Dolphin and cold-started Kate.
+2. Otherwise the oldest pending entry with the same `desktopFileName`
+   (`resourceClass` if empty), for apps that share one process.
+3. Entries expire after `PlacementTimeoutMs` (10 s). A launch that opens no
+   window is normal (e.g. Kate handing off to a running instance).
+
+Windows that match nothing are left alone. Activation tokens are not visible
+to KWin scripts, so they are not used. Captions are not stable; never match
+on them.
+
+### Radial menu (S2)
 
 QML scene in a full-screen transparent LayerShellQt surface on the overlay
-layer, owned by the daemon. Plasma theme colors via Kirigami. Selection is
-computed from the pointer angle relative to the center (pure function,
-unit-tested). Open questions *(spike S2)*: does the surface get pointer motion
-without taking keyboard focus, how to get the initial pointer position on
-Wayland, and does the shortcut release still reach `kglobalaccel` while the
-overlay is up.
+layer, all four anchors, exclusive zone -1, keyboard interactivity none (the
+active window keeps focus), Kirigami theme colors. Created on demand (about
+65 ms to first frame in the nested session; keep it alive only if it feels
+slow). The center comes from KWin's `workspace.cursorPos` via a one-shot
+script (`CursorPos`), because the surface gets no `enter` event for a resting
+pointer; the first `enter` is only a fallback. The selected slice is computed
+from the last pointer position with `RadialMath::sliceAt` (pure, tested;
+taken from `spikes/S2/`) when the gesture state machine reports the release.
+There is no Esc: holding Ctrl+Meta turns Esc into KWin's Kill Window
+shortcut. Cancel is releasing in the dead zone.
 
 ### vdwctl
 
-Small command-line tool that calls the D-Bus API. Used for scripting, for
-tests, and as a fallback way to bind workspaces.
+Small command-line tool over the Manager interface (`list`, `open <id>
+[--force]`, `capture <name>`, `reload`). Used for scripting and tests.
 
 ### KCM (System Settings page)
 
@@ -96,14 +182,21 @@ standard Shortcuts page rather than reimplementing a key editor.
 
 ## Testing
 
-- **Unit tests (Qt Test):** gesture state machine, config parsing, slice
-  selection math, fraction-to-rectangle layout math.
-- **Integration tests:** a nested, headless KWin (`kwin_wayland --virtual` in
-  its own D-Bus session) so tests launch and place real windows without
-  touching the user's desktop. Set up in T0b: `scripts/dev-session.sh`.
-  Integration tests run as `scripts/dev-session.sh run -- ctest ...` and
-  must skip (not fail) when no nested session is reachable. The nested
-  session has no keyboard, so real shortcut press/release is likely not testable
-  there (see `docs/spikes/T0b.md`).
-- **Manual:** the radial menu feel and real key handling on the live session,
-  done by the user.
+- **Unit tests (Qt Test):** gesture state machine, config parsing, window
+  matching, slice selection math, fraction-to-rectangle layout math.
+- **Integration tests:** the nested, headless KWin from
+  `scripts/dev-session.sh` (own bus, HOME and XDG dirs). Run them as
+  `scripts/dev-session.sh run -- ctest ...`; they must skip, not fail, when no
+  nested session is reachable. The nested session can do more than first
+  assumed (S1, S2):
+  - key and pointer events through `org_kde_kwin_fake_input`, from a helper
+    authorized by a `.desktop` file with
+    `X-KDE-Wayland-Interfaces=org_kde_kwin_fake_input` in the nested
+    `XDG_DATA_HOME` (`spikes/S1/s1inject`, `spikes/S2/tools/fakeinput.c`);
+  - screenshots through KWin's ScreenShot2 (`.desktop` with
+    `X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2`, then
+    `kbuildsycoca6`; `spikes/S2/tools/shot.cpp`).
+  So real shortcut press/release, the overlay and placement are all testable
+  there.
+- **Manual:** feel (gesture timing, menu look) and anything involving real
+  hardware, done by the user on the live session.

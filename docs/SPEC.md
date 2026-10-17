@@ -41,9 +41,14 @@ desktops are created.
 - **Empty desktop:** the apps launch and are placed immediately.
 - **Desktop already has windows:** nothing launches yet. A Plasma on-screen
   message appears, e.g. "Desktop not empty. Tap D again to set up 3 Konsoles
-  here." Tapping the shortcut's last key again (while still holding the
-  modifiers) confirms. Without a confirm, the request expires after a short
-  timeout (2 seconds, configurable) and the message fades.
+  here." Pressing the same shortcut again confirms, which with the modifiers
+  still held is just tapping D again. Without a confirm, the request expires
+  after 2 seconds (configurable) and the message fades.
+  - After a **tap**, letting go of Ctrl or Meta cancels the request right
+    away.
+  - After a **radial menu pick**, the user has usually let go of every key,
+    so letting go does not cancel; pressing Ctrl+Meta+D again within the
+    timeout confirms.
 - This applies to every way of opening a workspace: the main shortcut, a
   per-workspace shortcut, and the radial menu.
 - On confirm, existing windows are left untouched; new windows go into their
@@ -72,7 +77,8 @@ Shown while the main shortcut is held.
 - **Release** over a slice: open that workspace. On a busy desktop this goes
   through the same confirm flow as a tap: the message appears and tapping D
   again (while holding Ctrl+Meta) within the timeout confirms.
-- **Release** in the center dead zone, or press **Esc**: cancel.
+- **Release** in the center dead zone: cancel. There is no Esc: with Ctrl+Meta
+  held it would trigger KWin's Kill Window shortcut.
 - No saved workspaces: show a single hint ("No workspaces yet") instead.
 
 ## Out of scope for now
