@@ -23,7 +23,6 @@ depends=(
     'layer-shell-qt'
     'qt6-base'
     'qt6-declarative'
-    'qt6-wayland'
 )
 makedepends=('cmake' 'extra-cmake-modules' 'ninja')
 optdepends=('konsole: used by the starting "3 Konsoles" workspace')
