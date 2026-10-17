@@ -15,7 +15,7 @@ Status values: `todo`, `in-progress`, `blocked`, `done`.
 | S1 | Spike: KGlobalAccel tap/hold/confirm | T0b | B | done |
 | S2 | Spike: radial overlay on LayerShellQt | T0b | B | done |
 | S3 | Spike: KWin script placement via events | T0b | B | done |
-| S4 | Spike: launching and window matching | T0b | B | todo |
+| S4 | Spike: launching and window matching | T0b | B | done |
 | T1 | Daemon skeleton, config, D-Bus API, vdwctl | S1, S3 | | todo |
 | T2 | Launch and placement engine | T1, S3, S4 | C | todo |
 | T3 | Shortcuts, gesture state machine, OSD | T1, S1 | C | todo |
