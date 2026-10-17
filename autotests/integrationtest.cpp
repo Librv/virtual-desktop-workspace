@@ -216,6 +216,45 @@ private:
         return count;
     }
 
+    // Frame geometries of the KWin windows whose resource class is `cls`.
+    // Empty on a script failure, so check the count before the rectangles.
+    QList<QRectF> geometriesOfClass(const QString &cls)
+    {
+        m_receiver.reports.clear();
+        const QString source = QStringLiteral(
+            "callDBus('org.kde.vdw.T2test', '/T2', 'org.kde.vdw.T2test', 'Report',\n"
+            "  JSON.stringify(workspace.stackingOrder.map(function(w) { return [w.resourceClass, w.frameGeometry.x, w.frameGeometry.y, "
+            "w.frameGeometry.width, w.frameGeometry.height]; })));\n");
+        QList<QRectF> rects;
+        if (!runScript(QStringLiteral("vdw-toast-geometries"), source)
+            || !QTest::qWaitFor(
+                [this] {
+                    return !m_receiver.reports.isEmpty();
+                },
+                5000)) {
+            return rects;
+        }
+        for (const QJsonValue &v : QJsonDocument::fromJson(m_receiver.reports.last().toUtf8()).array()) {
+            const QJsonArray a = v.toArray();
+            if (a.at(0).toString() == cls) {
+                rects.append(QRectF(a.at(1).toDouble(), a.at(2).toDouble(), a.at(3).toDouble(), a.at(4).toDouble()));
+            }
+        }
+        return rects;
+    }
+
+    // True if exactly one vdwd surface is up and it sits at the top, centered.
+    bool toastAtTopCenter()
+    {
+        const QList<QRectF> rects = geometriesOfClass(QStringLiteral("vdwd"));
+        if (rects.size() != 1) {
+            return false;
+        }
+        const QRect area = snapshot().area;
+        const QRectF r = rects.first();
+        return r.top() < area.top() + 100 && qAbs(r.center().x() - area.center().x()) < 5 && r.width() < area.width() / 2;
+    }
+
     bool closeAll()
     {
         runScript(QStringLiteral("vdw-t3b-close"),
@@ -448,6 +487,34 @@ private Q_SLOTS:
         QVERIFY(windowsAtSlots(2, 6));
     }
 
+    // A busy tap shows the toast at the top center; releasing the modifiers
+    // hides it and the next tap (modifiers up) is cancelled without a toast.
+    void testBusyShowsToastAndModifierReleaseHidesIt()
+    {
+        QVERIFY(windowsAtSlots(2, 6));
+        QCOMPARE(windowsOfClass(QStringLiteral("vdwd")), 0);
+        debugCall(QStringLiteral("ModifiersHeld"), {true});
+        tap(QStringLiteral("main"));
+        QTRY_VERIFY_WITH_TIMEOUT(toastAtTopCenter(), 1800);
+        debugCall(QStringLiteral("ModifiersHeld"), {false});
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
+        tap(QStringLiteral("main"));
+        QTest::qWait(1000);
+        QCOMPARE(windowsOfClass(QStringLiteral("vdwd")), 0);
+        QVERIFY(windowsAtSlots(2, 6));
+    }
+
+    // The toast also goes away by itself with the confirm timeout.
+    void testToastHidesOnTimeout()
+    {
+        debugCall(QStringLiteral("ModifiersHeld"), {true});
+        tap(QStringLiteral("main"));
+        QTRY_VERIFY_WITH_TIMEOUT(toastAtTopCenter(), 1800);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
+        debugCall(QStringLiteral("ModifiersHeld"), {false});
+        QVERIFY(windowsAtSlots(2, 6));
+    }
+
     // Holding the main shortcut shows the menu overlay; releasing it over the
     // dead zone cancels and opens nothing.
     void testHoldShowsMenuAndCancels()
@@ -552,6 +619,53 @@ private Q_SLOTS:
         QCOMPARE(keys->exitCode(), 0);
         QTRY_VERIFY_WITH_TIMEOUT(oneWindowFillsArea(), 20000);
         QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
+    }
+
+    // Best effort: a menu pick on a busy desktop shows the toast, and letting
+    // go of Ctrl+Meta cancels it (the pick itself is released with D first).
+    void testRealKeyMenuBusyCancelledByModifierRelease()
+    {
+        const QString inject = QStringLiteral(S1INJECT_PATH);
+        const QString pointer = QStringLiteral(S2FAKEINPUT_PATH);
+        if (!QFileInfo::exists(inject) || !QFileInfo::exists(pointer)) {
+            QSKIP("spikes/S1 or spikes/S2 helpers are not built");
+        }
+        if (!authorizeFakeInput(inject, QStringLiteral("vdw-s1-inject")) || !authorizeFakeInput(pointer, QStringLiteral("vdw-s2-fakeinput"))) {
+            QSKIP("cannot authorize the helpers in the nested XDG_DATA_HOME");
+        }
+        QVERIFY(oneWindowFillsArea());
+        const QRect area = snapshot().area;
+        const int cx = area.center().x();
+        const int cy = area.center().y();
+        const auto moveTo = [&](int x, int y) {
+            auto p = startHelper(pointer, {QStringLiteral("abs"), QString::number(x), QString::number(y)});
+            return p && p->waitForFinished(10000) && p->exitCode() == 0;
+        };
+        QVERIFY(moveTo(cx, cy));
+
+        const QStringList steps = {QStringLiteral("300"),
+                                   QStringLiteral("+ctrl"),
+                                   QStringLiteral("30"),
+                                   QStringLiteral("+meta"),
+                                   QStringLiteral("30"),
+                                   QStringLiteral("+d"),
+                                   QStringLiteral("9000"),
+                                   QStringLiteral("-d"),
+                                   QStringLiteral("1500"),
+                                   QStringLiteral("-meta"),
+                                   QStringLiteral("30"),
+                                   QStringLiteral("-ctrl"),
+                                   QStringLiteral("100")};
+        auto keys = startHelper(inject, steps);
+        QVERIFY(keys);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 1, 10000);
+        QVERIFY(moveTo(cx, cy - 120));
+        QVERIFY(moveTo(cx, cy - 200));
+        QTRY_VERIFY_WITH_TIMEOUT(toastAtTopCenter(), 20000);
+        QVERIFY(keys->waitForFinished(20000));
+        QCOMPARE(keys->exitCode(), 0);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
+        QVERIFY(oneWindowFillsArea());
     }
 
     // ---- capture (T6) ----

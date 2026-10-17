@@ -4,10 +4,10 @@ find_package(LayerShellQt REQUIRED)
 
 set(CMAKE_AUTOMOC ON)
 
-add_library(vdwmenu STATIC radialmath.cpp radialmenu.cpp)
+add_library(vdwmenu STATIC radialmath.cpp radialmenu.cpp toast.cpp)
 qt_add_resources(vdwmenu "vdwmenu_qml"
     PREFIX "/vdwmenu"
-    FILES RadialMenu.qml)
+    FILES RadialMenu.qml Toast.qml)
 target_include_directories(vdwmenu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(vdwmenu PUBLIC Qt6::Gui Qt6::Quick LayerShellQt::Interface)
 

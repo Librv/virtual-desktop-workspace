@@ -18,4 +18,8 @@ QList<Qt::Key> modifierKeys(const QKeySequence &sequence);
 /// Ctrl+Meta+D). Empty for an empty sequence.
 QString keyText(const QKeySequence &sequence);
 
+/// The modifiers of the first chord as display text in modifierKeys() order
+/// ("Ctrl+Meta" for Ctrl+Meta+D). Empty when there are none.
+QString modifierText(const QKeySequence &sequence);
+
 }

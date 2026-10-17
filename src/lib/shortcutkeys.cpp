@@ -3,6 +3,8 @@
 
 #include "shortcutkeys.h"
 
+#include <QStringList>
+
 namespace Vdw::ShortcutKeys
 {
 
@@ -34,6 +36,28 @@ QString keyText(const QKeySequence &sequence)
         return {};
     }
     return QKeySequence(sequence[0].key()).toString(QKeySequence::PortableText);
+}
+
+QString modifierText(const QKeySequence &sequence)
+{
+    QStringList names;
+    for (const Qt::Key key : modifierKeys(sequence)) {
+        switch (key) {
+        case Qt::Key_Control:
+            names << QStringLiteral("Ctrl");
+            break;
+        case Qt::Key_Meta:
+            names << QStringLiteral("Meta");
+            break;
+        case Qt::Key_Shift:
+            names << QStringLiteral("Shift");
+            break;
+        default:
+            names << QStringLiteral("Alt");
+            break;
+        }
+    }
+    return names.join(QLatin1Char('+'));
 }
 
 }

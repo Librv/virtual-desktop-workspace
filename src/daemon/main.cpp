@@ -8,6 +8,7 @@
 #include "manager.h"
 #include "radialmenu.h"
 #include "shortcuts.h"
+#include "toast.h"
 
 #include "configwriter.h"
 
@@ -70,7 +71,8 @@ int main(int argc, char *argv[])
     Vdw::ScriptApi script(&manager, &scripts);
     Vdw::Shortcuts shortcuts;
     RadialMenu menu;
-    Vdw::GestureController controller(&manager, &shortcuts, &scripts, &menu);
+    Toast toast;
+    Vdw::GestureController controller(&manager, &shortcuts, &scripts, &menu, &toast);
     Vdw::DebugApi debug(&controller);
 
     QDBusConnection bus = QDBusConnection::sessionBus();

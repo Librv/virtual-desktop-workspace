@@ -44,6 +44,24 @@ private Q_SLOTS:
         QFETCH(QString, text);
         QCOMPARE(ShortcutKeys::keyText(QKeySequence(sequence)), text);
     }
+
+    void testModifierText_data()
+    {
+        QTest::addColumn<QString>("sequence");
+        QTest::addColumn<QString>("text");
+        QTest::newRow("ctrl+meta+d") << "Ctrl+Meta+D" << "Ctrl+Meta";
+        QTest::newRow("meta+ctrl+d") << "Meta+Ctrl+D" << "Ctrl+Meta";
+        QTest::newRow("all four") << "Ctrl+Alt+Shift+Meta+F9" << "Ctrl+Meta+Shift+Alt";
+        QTest::newRow("alt only") << "Alt+F2" << "Alt";
+        QTest::newRow("no modifier") << "F9" << "";
+        QTest::newRow("empty") << "" << "";
+    }
+    void testModifierText()
+    {
+        QFETCH(QString, sequence);
+        QFETCH(QString, text);
+        QCOMPARE(ShortcutKeys::modifierText(QKeySequence(sequence)), text);
+    }
 };
 
 QTEST_GUILESS_MAIN(ShortcutKeysTest)

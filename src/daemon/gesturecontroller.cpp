@@ -8,11 +8,8 @@
 #include "radialmenu.h"
 #include "shortcutkeys.h"
 #include "shortcuts.h"
+#include "toast.h"
 
-#include <QDBusConnection>
-#include <QDBusMessage>
-#include <QDBusPendingCallWatcher>
-#include <QDBusPendingReply>
 #include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QScreen>
@@ -28,13 +25,18 @@ Vdw::Shortcut shortcutFromName(const QString &name)
     return name == QLatin1String("main") ? Vdw::Shortcut::main() : Vdw::Shortcut::workspace(name);
 }
 
-GestureController::GestureController(Manager *manager, Shortcuts *shortcuts, KWinScripts *scripts, RadialMenu *menu, QObject *parent)
+GestureController::GestureController(Manager *manager, Shortcuts *shortcuts, KWinScripts *scripts, RadialMenu *menu, Toast *toast, QObject *parent)
     : QObject(parent)
     , m_manager(manager)
     , m_shortcuts(shortcuts)
     , m_scripts(scripts)
     , m_menu(menu)
+    , m_toast(toast)
+    , m_toastTimer(new QTimer(this))
 {
+    m_toastTimer->setSingleShot(true);
+    m_toastTimer->setInterval(3000);
+    connect(m_toastTimer, &QTimer::timeout, this, &GestureController::hideToast);
     refreshConfig();
     connect(m_manager, &Manager::configReloaded, this, &GestureController::refreshConfig);
     connect(m_shortcuts, &Shortcuts::pressed, this, &GestureController::press);
@@ -100,7 +102,10 @@ void GestureController::runCommand(const Vdw::Command &command)
         hideMenu();
         break;
     case Kind::ShowConfirmOsd:
-        showConfirmOsd(command.workspaceId);
+        showConfirmToast(command.workspaceId);
+        break;
+    case Kind::HideConfirmOsd:
+        hideToast();
         break;
     }
 }
@@ -113,7 +118,7 @@ void GestureController::open(const QString &id, bool force)
         // shortcut by itself (the machine's confirm rule).
         m_confirmShortcuts.insert(id, m_lastPressed.isMain ? Vdw::Shortcut::main() : m_lastPressed);
         if (m_lastPressed.isMain && !m_manager->config().find(id)) {
-            showNoDefaultOsd();
+            showNoDefaultToast();
         }
     }
     m_manager->open(id, force, [this, id](const QString &result) {
@@ -155,46 +160,46 @@ void GestureController::hideMenu()
     m_menu->hide();
 }
 
-void GestureController::showConfirmOsd(const QString &id)
+void GestureController::showConfirmToast(const QString &id)
 {
     const Workspace *workspace = m_manager->config().find(id);
     const QString name = workspace ? workspace->name : id;
     const QString icon = workspace && !workspace->icon.isEmpty() ? workspace->icon : QStringLiteral("virtual-desktops");
 
-    QString key = ShortcutKeys::keyText(m_shortcuts->sequence(m_confirmShortcuts.value(id, Vdw::Shortcut::main())));
-    if (key.isEmpty()) {
-        key = ShortcutKeys::keyText(m_shortcuts->sequence(Vdw::Shortcut::main()));
+    const Vdw::Shortcut confirmShortcut = m_confirmShortcuts.value(id, Vdw::Shortcut::main());
+    QKeySequence sequence = m_shortcuts->sequence(confirmShortcut);
+    if (sequence.isEmpty()) {
+        sequence = m_shortcuts->sequence(Vdw::Shortcut::main());
     }
+    // Only main-shortcut confirms require the modifiers to stay held.
+    const QString mods = confirmShortcut.isMain ? ShortcutKeys::modifierText(sequence) : QString();
+    QString key = ShortcutKeys::keyText(sequence);
     if (key.isEmpty()) {
         key = QStringLiteral("the shortcut");
     }
-    const QString text = QStringLiteral("Desktop not empty. Press %1 again to set up %2 here.").arg(key, name);
-    showOsd(icon, text);
+    const QString text = mods.isEmpty() ? QStringLiteral("Desktop not empty. Press %1 again to set up %2 here.").arg(key, name)
+                                        : QStringLiteral("Desktop not empty. Keep holding %1 and press %2 to set up %3 here.").arg(mods, key, name);
+    showToast(icon, text);
 }
 
-void GestureController::showNoDefaultOsd()
+void GestureController::showNoDefaultToast()
 {
-    showOsd(QStringLiteral("preferences-desktop-virtual"),
-            QStringLiteral("No default workspace. Hold the shortcut for the menu, or pick one in System Settings."));
+    showToast(QStringLiteral("preferences-desktop-virtual"),
+              QStringLiteral("No default workspace. Hold the shortcut for the menu, or pick one in System Settings."));
+    m_toastTimer->start();
 }
 
-void GestureController::showOsd(const QString &icon, const QString &text)
+void GestureController::showToast(const QString &icon, const QString &text)
 {
-    qCInfo(VDW_DAEMON) << "gesture: OSD" << text;
+    qCInfo(VDW_DAEMON) << "gesture: toast" << text;
+    m_toastTimer->stop();
+    m_toast->show(icon, text);
+}
 
-    QDBusMessage message = QDBusMessage::createMethodCall(QStringLiteral("org.kde.plasmashell"),
-                                                          QStringLiteral("/org/kde/osdService"),
-                                                          QStringLiteral("org.kde.osdService"),
-                                                          QStringLiteral("showText"));
-    message.setArguments({icon, text});
-    auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(message), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [watcher] {
-        const QDBusPendingReply<> reply = *watcher;
-        if (reply.isError()) {
-            qCWarning(VDW_DAEMON) << "gesture: cannot show the OSD:" << reply.error().message();
-        }
-        watcher->deleteLater();
-    });
+void GestureController::hideToast()
+{
+    m_toastTimer->stop();
+    m_toast->hide();
 }
 
 }

@@ -9,6 +9,8 @@
 #include <QObject>
 
 class RadialMenu;
+class Toast;
+class QTimer;
 
 namespace Vdw
 {
@@ -18,13 +20,13 @@ class Manager;
 class Shortcuts;
 
 /// Owns the GestureMachine and carries out its commands: timers, opening
-/// workspaces through the Manager, the radial menu and the confirm OSD.
+/// workspaces through the Manager, the radial menu and the toast.
 class GestureController : public QObject
 {
     Q_OBJECT
 
 public:
-    GestureController(Manager *manager, Shortcuts *shortcuts, KWinScripts *scripts, RadialMenu *menu, QObject *parent = nullptr);
+    GestureController(Manager *manager, Shortcuts *shortcuts, KWinScripts *scripts, RadialMenu *menu, Toast *toast, QObject *parent = nullptr);
 
     /// The three inputs; real shortcuts and the /Debug object use the same ones.
     void press(const Vdw::Shortcut &shortcut);
@@ -37,9 +39,10 @@ private:
     void open(const QString &id, bool force);
     void showMenu();
     void hideMenu();
-    void showConfirmOsd(const QString &id);
-    void showNoDefaultOsd();
-    void showOsd(const QString &icon, const QString &text);
+    void showConfirmToast(const QString &id);
+    void showNoDefaultToast();
+    void showToast(const QString &icon, const QString &text);
+    void hideToast();
     void refreshConfig();
 
     Vdw::GestureMachine m_machine;
@@ -47,6 +50,9 @@ private:
     Shortcuts *m_shortcuts;
     KWinScripts *m_scripts;
     RadialMenu *m_menu;
+    Toast *m_toast;
+    /// Hides the no-default-workspace hint; stopped by every other toast change.
+    QTimer *m_toastTimer;
     /// Bumped by every ShowMenu and HideMenu so that a slow cursor query
     /// never shows a menu the user has already released.
     int m_menuGeneration = 0;

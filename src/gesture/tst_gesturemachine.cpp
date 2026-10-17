@@ -34,6 +34,9 @@ QString describe(const Commands &cmds)
         case K::ShowConfirmOsd:
             parts << QStringLiteral("ShowConfirmOsd(%1)").arg(c.workspaceId);
             break;
+        case K::HideConfirmOsd:
+            parts << QStringLiteral("HideConfirmOsd");
+            break;
         }
     }
     return parts.join(QLatin1Char(' '));
@@ -173,7 +176,7 @@ private Q_SLOTS:
         CMDS(m.openResult(QStringLiteral("a"), true), "ShowConfirmOsd(a) StartTimer(2000)");
         // The main shortcut is not the confirming shortcut here: it starts a new gesture.
         QCOMPARE(m.state(), GestureMachine::State::AwaitingConfirm);
-        CMDS(m.press(kWsA), "Open(a,force)");
+        CMDS(m.press(kWsA), "HideConfirmOsd Open(a,force)");
         QCOMPARE(m.state(), GestureMachine::State::Idle);
         CMDS(m.release(kWsA), "");
     }
@@ -185,7 +188,7 @@ private Q_SLOTS:
         m.release(kWsA);
         m.openResult(QStringLiteral("a"), true);
         const Shortcut b = Shortcut::workspace(QStringLiteral("b"));
-        CMDS(m.press(b), "");
+        CMDS(m.press(b), "HideConfirmOsd");
         CMDS(m.release(b), "Open(b,plain)");
     }
 
@@ -195,7 +198,7 @@ private Q_SLOTS:
         m.press(kWsA);
         m.release(kWsA);
         m.openResult(QStringLiteral("a"), true);
-        CMDS(m.press(kMain), "StartTimer(250)");
+        CMDS(m.press(kMain), "HideConfirmOsd StartTimer(250)");
         CMDS(m.release(kMain), "Open(def,plain)");
     }
 
@@ -204,7 +207,7 @@ private Q_SLOTS:
         GestureMachine m = make();
         int tok = 0;
         tapBusy(m, tok);
-        CMDS(m.press(kMain), "Open(def,force)");
+        CMDS(m.press(kMain), "HideConfirmOsd Open(def,force)");
         QCOMPARE(m.state(), GestureMachine::State::Idle);
         // The matching release is swallowed.
         CMDS(m.release(kMain), "");
@@ -216,11 +219,8 @@ private Q_SLOTS:
         GestureMachine m = make();
         int tok = 0;
         menuPickBusy(m, tok);
-        // Modifiers released together with the shortcut do not cancel here.
-        CMDS(m.modifiersHeld(false), "");
-        QCOMPARE(m.state(), GestureMachine::State::AwaitingConfirm);
         CMDS(m.modifiersHeld(true), "");
-        CMDS(m.press(kMain), "Open(x,force)");
+        CMDS(m.press(kMain), "HideConfirmOsd Open(x,force)");
         QCOMPARE(m.state(), GestureMachine::State::Idle);
         CMDS(m.release(kMain), "");
     }
@@ -230,7 +230,7 @@ private Q_SLOTS:
         GestureMachine m = make();
         int t = 0;
         tapBusy(m, t);
-        CMDS(m.modifiersHeld(false), "");
+        CMDS(m.modifiersHeld(false), "HideConfirmOsd");
         QCOMPARE(m.state(), GestureMachine::State::Idle);
         // The cancelled confirm timer is stale and a new press is an ordinary tap.
         CMDS(m.timerFired(t), "");
@@ -238,12 +238,75 @@ private Q_SLOTS:
         CMDS(m.release(kMain), "Open(def,plain)");
     }
 
+    void menuConfirmCancelledByModifierRelease()
+    {
+        GestureMachine m = make();
+        int t = 0;
+        menuPickBusy(m, t);
+        CMDS(m.modifiersHeld(false), "HideConfirmOsd");
+        QCOMPARE(m.state(), GestureMachine::State::Idle);
+        CMDS(m.timerFired(t), "");
+        CMDS(m.press(kMain), "StartTimer(250)");
+    }
+
+    void busyWithModifiersUpCancelsWithoutToast()
+    {
+        GestureMachine m = make();
+        m.press(kMain);
+        m.release(kMain);
+        CMDS(m.modifiersHeld(false), "");
+        CMDS(m.openResult(kDefault, true), "");
+        QCOMPARE(m.state(), GestureMachine::State::Idle);
+    }
+
+    void busyMenuPickWithModifiersUpCancelsWithoutToast()
+    {
+        GestureMachine m = make();
+        m.timerFired(tokenOf(m.press(kMain)));
+        m.release(kMain);
+        m.menuResult(QStringLiteral("x"));
+        m.modifiersHeld(false);
+        CMDS(m.openResult(QStringLiteral("x"), true), "");
+        QCOMPARE(m.state(), GestureMachine::State::Idle);
+    }
+
+    void workspaceBusyWithModifiersUpStillConfirms()
+    {
+        GestureMachine m = make();
+        m.modifiersHeld(false);
+        m.press(kWsA);
+        m.release(kWsA);
+        CMDS(m.openResult(QStringLiteral("a"), true), "ShowConfirmOsd(a) StartTimer(2000)");
+    }
+
+    void modifiersBackUpAllowsConfirmAgain()
+    {
+        GestureMachine m = make();
+        m.modifiersHeld(false);
+        m.modifiersHeld(true);
+        int t = 0;
+        tapBusy(m, t);
+    }
+
+    void hideConfirmOsdOnPressOfAnotherShortcut()
+    {
+        GestureMachine m = make();
+        int t = 0;
+        tapBusy(m, t);
+        CMDS(m.press(kWsA), "HideConfirmOsd");
+        QCOMPARE(m.state(), GestureMachine::State::WorkspacePressed);
+        // Main press during a workspace confirm: hide, then a fresh hold timer.
+        m.release(kWsA);
+        m.openResult(QStringLiteral("a"), true);
+        CMDS(m.press(kMain), "HideConfirmOsd StartTimer(250)");
+    }
+
     void tapConfirmCancelledByTimeout()
     {
         GestureMachine m = make();
         int t = 0;
         tapBusy(m, t);
-        CMDS(m.timerFired(t), "");
+        CMDS(m.timerFired(t), "HideConfirmOsd");
         QCOMPARE(m.state(), GestureMachine::State::Idle);
         CMDS(m.press(kMain), "StartTimer(250)");
     }
@@ -253,7 +316,7 @@ private Q_SLOTS:
         GestureMachine m = make();
         int t = 0;
         menuPickBusy(m, t);
-        CMDS(m.timerFired(t), "");
+        CMDS(m.timerFired(t), "HideConfirmOsd");
         QCOMPARE(m.state(), GestureMachine::State::Idle);
         // A press after the timeout is a fresh gesture, not a confirm.
         CMDS(m.press(kMain), "StartTimer(250)");
@@ -264,9 +327,7 @@ private Q_SLOTS:
         GestureMachine m = make();
         CMDS(m.modifiersHeld(true), "");
         CMDS(m.modifiersHeld(false), "");
-        int t = 0;
-        tapBusy(m, t);
-        Q_UNUSED(t);
+        QCOMPARE(m.state(), GestureMachine::State::Idle);
     }
 
     void releaseWithoutPressIgnored()
@@ -357,11 +418,12 @@ private Q_SLOTS:
         int t1 = 0;
         tapBusy(m, t1);
         m.modifiersHeld(false);
+        m.modifiersHeld(true);
         int t2 = 0;
         tapBusy(m, t2);
         CMDS(m.timerFired(t1), "");
         QCOMPARE(m.state(), GestureMachine::State::AwaitingConfirm);
-        CMDS(m.timerFired(t2), "");
+        CMDS(m.timerFired(t2), "HideConfirmOsd");
         QCOMPARE(m.state(), GestureMachine::State::Idle);
     }
 
@@ -409,7 +471,7 @@ private Q_SLOTS:
         m.openResult(QStringLiteral("a"), true);
         CMDS(m.modifiersHeld(false), "");
         QCOMPARE(m.state(), GestureMachine::State::AwaitingConfirm);
-        CMDS(m.press(kWsA), "Open(a,force)");
+        CMDS(m.press(kWsA), "HideConfirmOsd Open(a,force)");
     }
 
     void modifiersIgnoredInPressedAndMenu()

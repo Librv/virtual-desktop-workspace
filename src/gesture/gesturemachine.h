@@ -34,7 +34,8 @@ struct Command {
         ShowMenu,
         HideMenu,
         Open, ///< Open workspaceId; force skips the busy check.
-        ShowConfirmOsd, ///< Tell the user to tap again to confirm workspaceId.
+        ShowConfirmOsd, ///< Tell the user to press the shortcut again to confirm workspaceId.
+        HideConfirmOsd, ///< An AwaitingConfirm state ended (confirm, cancel, timeout or a new gesture).
     };
 
     static Command startTimer(int token, int ms)
@@ -56,6 +57,10 @@ struct Command {
     static Command showConfirmOsd(const QString &id)
     {
         return {Kind::ShowConfirmOsd, 0, 0, id, false};
+    }
+    static Command hideConfirmOsd()
+    {
+        return {Kind::HideConfirmOsd, 0, 0, {}, false};
     }
     bool operator==(const Command &) const = default;
 
@@ -87,15 +92,19 @@ public:
 
     Commands press(const Shortcut &shortcut);
     Commands release(const Shortcut &shortcut);
-    /// True while all modifiers of the main shortcut are held. Only cancels a
-    /// pending confirm that came from a tap of the main shortcut; confirms from
-    /// a workspace shortcut or a menu pick end by timeout (or by a press of
-    /// another shortcut). No effect in any other state.
+    /// True while all modifiers of the main shortcut are held (assumed until
+    /// told otherwise). Releasing them cancels a pending confirm that came from
+    /// the main shortcut (a tap or a menu pick); confirms from a workspace
+    /// shortcut end by timeout (or by a press of another shortcut). A busy
+    /// openResult() for the main shortcut while they are up cancels without a
+    /// confirm. No other effect.
     Commands modifiersHeld(bool held);
     Commands timerFired(int token);
     /// Selection at release time; empty for the dead zone.
     Commands menuResult(const std::optional<QString> &workspaceId);
     /// Answer to an Open(id, false) command.
+    /// A busy answer starts the confirm (ShowConfirmOsd) unless the open came
+    /// from the main shortcut and its modifiers are already up: then it just ends.
     Commands openResult(const QString &workspaceId, bool busy);
 
     enum class State {
@@ -115,7 +124,7 @@ public:
 private:
     void startTimer(Commands &out, int ms);
     void invalidateTimer();
-    Commands beginOpen(const QString &id, const Shortcut &confirmShortcut, bool modifiersCancel);
+    Commands beginOpen(const QString &id, const Shortcut &confirmShortcut);
     Commands beginPress(const Shortcut &shortcut);
 
     GestureConfig m_config;
@@ -126,7 +135,7 @@ private:
     /// Set when Open(id, false) is emitted, used by openResult().
     QString m_confirmId;
     Shortcut m_confirmShortcut; ///< The shortcut whose press confirms.
-    bool m_modifiersCancel = false; ///< Confirm came from a tap of the main shortcut.
+    bool m_modifiersHeld = true;
 };
 
 } // namespace Vdw

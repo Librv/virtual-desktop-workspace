@@ -46,28 +46,30 @@ Commands GestureMachine::beginPress(const Shortcut &shortcut)
     return out;
 }
 
-Commands GestureMachine::beginOpen(const QString &id, const Shortcut &confirmShortcut, bool modifiersCancel)
+Commands GestureMachine::beginOpen(const QString &id, const Shortcut &confirmShortcut)
 {
     m_state = State::AwaitingOpenResult;
     m_confirmId = id;
     m_confirmShortcut = confirmShortcut;
-    m_modifiersCancel = modifiersCancel;
     return {Command::open(id, false)};
 }
 
 Commands GestureMachine::press(const Shortcut &shortcut)
 {
     switch (m_state) {
-    case State::AwaitingConfirm:
+    case State::AwaitingConfirm: {
         if (shortcut == m_confirmShortcut) {
             // The matching release arrives in Idle and is ignored.
             const QString id = m_confirmId;
             m_state = State::Idle;
             invalidateTimer();
-            return {Command::open(id, true)};
+            return {Command::hideConfirmOsd(), Command::open(id, true)};
         }
         // Another shortcut: the confirm window is over, start fresh.
-        return beginPress(shortcut);
+        Commands out{Command::hideConfirmOsd()};
+        out += beginPress(shortcut);
+        return out;
+    }
     case State::Menu: {
         // A press without a release: restart, closing the menu.
         Commands out{Command::hideMenu()};
@@ -92,9 +94,9 @@ Commands GestureMachine::release(const Shortcut &shortcut)
     switch (m_state) {
     case State::Pressed:
         invalidateTimer();
-        return beginOpen(m_config.defaultWorkspaceId, kMain, true);
+        return beginOpen(m_config.defaultWorkspaceId, kMain);
     case State::WorkspacePressed:
-        return beginOpen(shortcut.workspaceId, shortcut, false);
+        return beginOpen(shortcut.workspaceId, shortcut);
     case State::Menu:
         m_state = State::AwaitingMenuResult;
         return {};
@@ -109,11 +111,11 @@ Commands GestureMachine::release(const Shortcut &shortcut)
 
 Commands GestureMachine::modifiersHeld(bool held)
 {
-    // Only a tap of the main shortcut cancels on modifier release: after a
-    // menu pick the modifiers usually go up together with the shortcut.
-    if (!held && m_state == State::AwaitingConfirm && m_modifiersCancel) {
+    m_modifiersHeld = held;
+    if (!held && m_state == State::AwaitingConfirm && m_confirmShortcut.isMain) {
         m_state = State::Idle;
         invalidateTimer();
+        return {Command::hideConfirmOsd()};
     }
     return {};
 }
@@ -129,6 +131,7 @@ Commands GestureMachine::timerFired(int token)
     }
     if (m_state == State::AwaitingConfirm) {
         m_state = State::Idle;
+        return {Command::hideConfirmOsd()};
     }
     return {};
 }
@@ -140,7 +143,7 @@ Commands GestureMachine::menuResult(const std::optional<QString> &workspaceId)
     }
     Commands out{Command::hideMenu()};
     if (workspaceId) {
-        out += beginOpen(*workspaceId, kMain, false);
+        out += beginOpen(*workspaceId, kMain);
     } else {
         m_state = State::Idle;
     }
@@ -153,6 +156,10 @@ Commands GestureMachine::openResult(const QString &workspaceId, bool busy)
         return {};
     }
     if (!busy) {
+        m_state = State::Idle;
+        return {};
+    }
+    if (m_confirmShortcut.isMain && !m_modifiersHeld) {
         m_state = State::Idle;
         return {};
     }

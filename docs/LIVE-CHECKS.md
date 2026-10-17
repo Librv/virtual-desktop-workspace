@@ -44,24 +44,30 @@ unless a step says otherwise. These merge the user steps of `spikes/S1.md`,
 
 ## 3. Confirm on a busy desktop
 
-12. With windows on the desktop, tap Ctrl+Meta+D. Expected: nothing launches;
-    a Plasma on-screen message "Desktop not empty..." appears.
-13. Tap D again within 2 seconds while still holding Ctrl+Meta. Expected: the
-    workspace opens on top of the existing windows (which stay untouched).
-14. Tap, then let go of Ctrl or Meta, then tap D. Expected: the request was
-    cancelled at the release and the second tap shows the message again.
-15. Tap and do nothing for 3 seconds, then tap again. Expected: the message
-    shows again, nothing launches.
-16. Radial menu path: on a busy desktop hold, release over a slice. Expected:
-    the message appears; release all keys, press Ctrl+Meta+D again within 2
-    seconds. Expected: the workspace opens.
+12. With windows on the desktop, tap Ctrl+Meta+D and keep Ctrl+Meta held.
+    Expected: nothing launches; a toast centered at the top of the screen
+    reads "Desktop not empty. Keep holding Ctrl+Meta and press D to set up
+    <name> here."
+13. Press D again within 2 seconds while still holding Ctrl+Meta. Expected: the
+    toast goes away and the workspace opens on top of the existing windows
+    (which stay untouched).
+14. Tap, then let go of Ctrl or Meta. Expected: the toast disappears right
+    away and nothing launches. Pressing D afterwards is an ordinary tap. A very
+    short tap that lets go of Ctrl+Meta together with D shows no toast at all.
+15. Tap, keep Ctrl+Meta held and do nothing for 3 seconds. Expected: the toast
+    disappears after the 2 second timeout, nothing launches.
+16. Radial menu path: on a busy desktop hold, release D over a slice while
+    still holding Ctrl+Meta. Expected: the toast appears; pressing D again
+    within 2 seconds opens the workspace. Repeat and let go of Ctrl or Meta
+    instead. Expected: the toast disappears and nothing launches.
 
 ## 4. Workspace shortcut
 
 17. In System Settings, Virtual Desktop Workspaces, give a workspace its own
     shortcut ("Configure shortcuts..." or the Shortcuts page). Tap it on an
     empty desktop. Expected: that workspace opens; holding it never shows the
-    menu. On a busy desktop it asks to confirm like step 12.
+    menu. On a busy desktop it asks to confirm like step 12, but only the 2 second
+    timeout cancels (letting go of the modifiers does not).
 
 ## 5. Capture
 
