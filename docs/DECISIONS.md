@@ -20,6 +20,8 @@ rewrite old entries, add a new one that supersedes them.
 | 13 | 2026-10-17 | Window matching: pid first, then `desktopFileName` in launch order, pending entries expire after 10 s; no activation tokens, no captions | Measured in S4; tokens are not exposed to KWin scripts |
 | 14 | 2026-10-17 | D-Bus service `io.github.librv.vdw`, JSON strings for structured data; config in KConfig `vdwrc`, shortcuts owned by KGlobalAccel component `vdw` | Named after the GitHub repo; `callDBus` handles strings well and complex types badly (S3) |
 | 15 | 2026-10-17 | Agent workflow follows the user's global rules: implementers do not commit, a reviewer pass before a task is done, design decisions stay with the coordinator or the user | User's CLAUDE.md |
+| 16 | 2026-10-17 | KWin scripts are started with `org.kde.kwin.Scripting.start()`, never `Script<id>.run` | KWin reuses script ids after an unload, so `run` by id can start the wrong script (found in T2) |
+| 17 | 2026-10-17 | `OpenWorkspace` also replies `busy` (unless forced) while launches from an earlier open are still pending | The desktop looks empty until the windows appear, so a quick double press would launch everything twice; the confirm flow covers the intentional case (T2) |
 
 ## Open
 

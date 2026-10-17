@@ -131,8 +131,12 @@ numbers arrive as int32, so integer parameters are `i`).
 
 - **Long-lived placer script**, loaded at daemon startup through
   `org.kde.kwin.Scripting` (`isScriptLoaded` then `unloadScript` then
-  `loadScript` then `run`, because loading a name that is still loaded
-  fails). On `workspace.windowAdded` it calls `ClaimWindow` with the window's
+  `loadScript` then `Scripting.start()`, because loading a name that is still
+  loaded fails). Never run a script through `/Scripting/Script<id>`: KWin
+  derives the id from the number of loaded scripts, so after an unload a new
+  script can get the id of another live one (T2). `start()` runs every
+  loaded script that is not running yet. The placer is reloaded when
+  `org.kde.KWin` reappears on the bus. On `workspace.windowAdded` it calls `ClaimWindow` with the window's
   pid, `desktopFileName`, `resourceClass` and `internalId`. If a rect comes
   back it sets `frameGeometry` (it sticks; no re-apply needed), waits for
   `frameGeometryChanged` and calls `WindowPlaced`.
