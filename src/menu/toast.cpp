@@ -56,8 +56,3 @@ void Toast::hide()
 {
     m_view.reset();
 }
-
-bool Toast::isVisible() const
-{
-    return m_view != nullptr;
-}

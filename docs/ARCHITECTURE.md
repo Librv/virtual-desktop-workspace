@@ -122,7 +122,6 @@ numbers arrive as int32, so integer parameters are `i`).
 | | `CaptureCurrentDesktop(s name) -> s` | new workspace id, or `"error: ..."` (T6) |
 | | `ReloadConfig()` | re-read `vdwrc`, re-register shortcuts |
 | `/Script`, `io.github.librv.vdw.Script` | `ClaimWindow(s windowJson) -> s` | called by the KWin script on `windowAdded`; returns a rect JSON or `""` |
-| | `WindowPlaced(s json)` | script confirms a placement |
 | | `QueryResult(s requestId, s json)` | answers of one-shot query scripts |
 | | `CursorPos(i x, i y)` | pointer position for the radial menu center |
 | `/Debug`, `io.github.librv.vdw.Debug` | `Press(s shortcut)`, `Release(s shortcut)`, `ModifiersHeld(b)` | only when started with `--debug`: feed the state machine through the same path as real input; `shortcut` is `main` or a workspace id |
@@ -138,8 +137,7 @@ numbers arrive as int32, so integer parameters are `i`).
   loaded script that is not running yet. The placer is reloaded when
   `org.kde.KWin` reappears on the bus. On `workspace.windowAdded` it calls `ClaimWindow` with the window's
   pid, `desktopFileName`, `resourceClass` and `internalId`. If a rect comes
-  back it sets `frameGeometry` (it sticks; no re-apply needed), waits for
-  `frameGeometryChanged` and calls `WindowPlaced`.
+  back it sets `frameGeometry` (it sticks; no re-apply needed).
 - **One-shot query scripts** for the emptiness check, the usable area, the
   window list (T6) and the cursor position: loaded, run, they answer through
   `QueryResult`/`CursorPos`, then unloaded.

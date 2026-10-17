@@ -5,7 +5,6 @@
 
 #include "gesturemachine.h"
 
-#include <QHash>
 #include <QObject>
 
 class RadialMenu;
@@ -56,9 +55,6 @@ private:
     /// Bumped by every ShowMenu and HideMenu so that a slow cursor query
     /// never shows a menu the user has already released.
     int m_menuGeneration = 0;
-    Vdw::Shortcut m_lastPressed;
-    /// The shortcut whose press confirms, by workspace id (set when Open(id, false) runs).
-    QHash<QString, Vdw::Shortcut> m_confirmShortcuts;
 };
 
 /// The /Debug names of a shortcut: "main" or a workspace id.

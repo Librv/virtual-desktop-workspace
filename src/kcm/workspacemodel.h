@@ -7,6 +7,7 @@
 
 #include <QAbstractListModel>
 #include <QList>
+#include <QSet>
 
 namespace Vdw
 {
@@ -44,10 +45,13 @@ public:
         return m_default;
     }
 
-    /// Add a workspace named `name` with a fresh unique slug id; returns its row.
-    /// Append every workspace of `workspaces` whose id is not in the model yet;
-    /// existing ones (and their unsaved edits) stay untouched. Returns how many.
+    /// Append every workspace of `workspaces` (read from disk) that appeared
+    /// there since the last load or save: existing ones (and their unsaved
+    /// edits) stay untouched, deleted ones stay deleted. Returns how many.
     int mergeNew(const QList<Workspace> &workspaces);
+    /// The model was just written to disk: its ids are what disk holds now.
+    void markSaved();
+    /// Add a workspace named `name` with a fresh unique slug id; returns its row.
     Q_INVOKABLE int addWorkspace(const QString &name);
     Q_INVOKABLE void removeWorkspace(int row);
     /// Move `row` by `delta` positions (clamped); returns the new row.
@@ -79,6 +83,7 @@ private:
 
     QList<Workspace> m_workspaces;
     QString m_default;
+    QSet<QString> m_onDisk; ///< ids on disk at the last load, save or merge
 };
 
 /// The slots of one workspace of a WorkspaceModel, edited in place so that a

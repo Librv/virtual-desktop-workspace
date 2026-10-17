@@ -18,6 +18,7 @@ private Q_SLOTS:
     void moveAndDefault();
     void slotEditing();
     void mergeNew();
+    void mergeNewKeepsDeletions();
 };
 
 void WorkspaceModelTest::addUniqueIds()
@@ -108,6 +109,30 @@ void WorkspaceModelTest::mergeNew()
     QCOMPARE(m.index(1).data(WorkspaceModel::IdRole).toString(), QStringLiteral("error-log"));
     QCOMPARE(m.mergeNew({oldA, fresh}), 0);
     QCOMPARE(m.rowCount(), 2);
+}
+
+void WorkspaceModelTest::mergeNewKeepsDeletions()
+{
+    Workspace a;
+    a.id = "a";
+    a.name = "A";
+    Workspace b;
+    b.id = "b";
+    b.name = "B";
+    Workspace c;
+    c.id = "c";
+    c.name = "C";
+    WorkspaceModel m;
+    m.setWorkspaces({a, b}, QString());
+    m.removeWorkspace(1);
+    // Disk still has the deleted "b" and gained "c" from a capture.
+    QCOMPARE(m.mergeNew({a, b, c}), 1);
+    QCOMPARE(m.rowCount(), 2);
+    QCOMPARE(m.index(1).data(WorkspaceModel::IdRole).toString(), QStringLiteral("c"));
+    // Once saved without "b", a "b" that shows up on disk again is new.
+    m.markSaved();
+    QCOMPARE(m.mergeNew({a, b, c}), 1);
+    QCOMPARE(m.rowCount(), 3);
 }
 
 QTEST_APPLESS_MAIN(WorkspaceModelTest)

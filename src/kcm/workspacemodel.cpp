@@ -61,18 +61,28 @@ void WorkspaceModel::setWorkspaces(const QList<Workspace> &workspaces, const QSt
     m_workspaces = workspaces;
     m_default = defaultWorkspace;
     endResetModel();
+    markSaved();
     Q_EMIT defaultWorkspaceChanged();
+}
+
+void WorkspaceModel::markSaved()
+{
+    m_onDisk.clear();
+    for (const Workspace &ws : std::as_const(m_workspaces)) {
+        m_onDisk.insert(ws.id);
+    }
 }
 
 int WorkspaceModel::mergeNew(const QList<Workspace> &workspaces)
 {
     QList<Workspace> fresh;
     for (const Workspace &ws : workspaces) {
-        const bool known = std::any_of(m_workspaces.cbegin(), m_workspaces.cend(), [&](const Workspace &w) {
-            return w.id == ws.id;
-        });
+        const bool known = m_onDisk.contains(ws.id) || std::any_of(m_workspaces.cbegin(), m_workspaces.cend(), [&](const Workspace &w) {
+                               return w.id == ws.id;
+                           });
         if (!known) {
             fresh.append(ws);
+            m_onDisk.insert(ws.id);
         }
     }
     if (fresh.isEmpty()) {

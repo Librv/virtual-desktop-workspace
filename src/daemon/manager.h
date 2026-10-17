@@ -83,7 +83,6 @@ public:
 
 public Q_SLOTS:
     QString ClaimWindow(const QString &windowJson);
-    void WindowPlaced(const QString &json);
     void QueryResult(const QString &requestId, const QString &json);
     void CursorPos(int x, int y);
 

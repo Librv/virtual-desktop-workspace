@@ -139,11 +139,6 @@ void RadialMenu::hide()
     m_scene.reset();
 }
 
-bool RadialMenu::isVisible() const
-{
-    return m_view != nullptr;
-}
-
 QString RadialMenu::selectedId() const
 {
     return m_scene ? m_scene->selectedId() : QString();

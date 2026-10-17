@@ -56,7 +56,6 @@ void GestureController::refreshConfig()
 
 void GestureController::press(const Vdw::Shortcut &shortcut)
 {
-    m_lastPressed = shortcut;
     execute(m_machine.press(shortcut));
 }
 
@@ -113,13 +112,9 @@ void GestureController::runCommand(const Vdw::Command &command)
 void GestureController::open(const QString &id, bool force)
 {
     qCInfo(VDW_DAEMON) << "gesture: open" << id << "force" << force;
-    if (!force) {
-        // Taps and menu picks are confirmed by the main shortcut, a workspace
-        // shortcut by itself (the machine's confirm rule).
-        m_confirmShortcuts.insert(id, m_lastPressed.isMain ? Vdw::Shortcut::main() : m_lastPressed);
-        if (m_lastPressed.isMain && !m_manager->config().find(id)) {
-            showNoDefaultToast();
-        }
+    // A tap with no default (the loader clears an unknown DefaultWorkspace).
+    if (!force && id.isEmpty()) {
+        showNoDefaultToast();
     }
     m_manager->open(id, force, [this, id](const QString &result) {
         if (result.startsWith(QLatin1String("error"))) {
@@ -166,7 +161,7 @@ void GestureController::showConfirmToast(const QString &id)
     const QString name = workspace ? workspace->name : id;
     const QString icon = workspace && !workspace->icon.isEmpty() ? workspace->icon : QStringLiteral("virtual-desktops");
 
-    const Vdw::Shortcut confirmShortcut = m_confirmShortcuts.value(id, Vdw::Shortcut::main());
+    const Vdw::Shortcut confirmShortcut = m_machine.confirmShortcut();
     QKeySequence sequence = m_shortcuts->sequence(confirmShortcut);
     if (sequence.isEmpty()) {
         sequence = m_shortcuts->sequence(Vdw::Shortcut::main());

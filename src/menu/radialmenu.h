@@ -35,7 +35,6 @@ public:
     // An empty `items` shows the "No workspaces yet" hint.
     void show(QPoint center, const QVector<Item> &items);
     void hide();
-    bool isVisible() const;
 
     // Id of the slice under the last pointer position, or an empty string in
     // the dead zone, before any pointer event, or when not shown.

@@ -120,6 +120,11 @@ public:
     {
         return m_state;
     }
+    /// The shortcut whose press confirms the last Open(id, false).
+    Shortcut confirmShortcut() const
+    {
+        return m_confirmShortcut;
+    }
 
 private:
     void startTimer(Commands &out, int ms);

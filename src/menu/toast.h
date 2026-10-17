@@ -24,7 +24,6 @@ public:
     // Shows `text` with the theme icon `icon`, replacing any toast already up.
     void show(const QString &icon, const QString &text);
     void hide();
-    bool isVisible() const;
 
 private:
     std::unique_ptr<QQuickView> m_view;

@@ -34,11 +34,6 @@ public:
     /// The current key sequence of `shortcut` (empty if none is set).
     QKeySequence sequence(const Vdw::Shortcut &shortcut) const;
 
-    bool modifiersHeld() const
-    {
-        return m_modifiersHeld;
-    }
-
 Q_SIGNALS:
     void pressed(const Vdw::Shortcut &shortcut);
     void released(const Vdw::Shortcut &shortcut);

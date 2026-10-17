@@ -68,6 +68,9 @@ void VdwKcm::setStatusText(const QString &text)
 
 void VdwKcm::save()
 {
+    // Writing replaces every workspace: keep the ones added on disk since the
+    // load (e.g. `vdwctl capture`).
+    m_workspaces->mergeNew(Config::load(KConfig(QStringLiteral("vdwrc"), KConfig::SimpleConfig)).workspaces());
     updateProblems();
     if (!m_problems.isEmpty()) {
         setStatusText(i18n("Not saved: fix the problems listed above first."));
@@ -79,6 +82,7 @@ void VdwKcm::save()
         setStatusText(i18n("Could not write %1.", file.name()));
         return;
     }
+    m_workspaces->markSaved();
     setNeedsSave(false);
     setStatusText(i18n("Saved."));
     reloadDaemon();

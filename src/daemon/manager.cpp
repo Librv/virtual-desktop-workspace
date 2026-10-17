@@ -337,11 +337,6 @@ QString ScriptApi::ClaimWindow(const QString &windowJson)
     return m_manager->claimWindow(windowJson);
 }
 
-void ScriptApi::WindowPlaced(const QString &json)
-{
-    qCInfo(VDW_DAEMON) << "WindowPlaced" << json;
-}
-
 void ScriptApi::QueryResult(const QString &requestId, const QString &json)
 {
     m_scripts->handleResult(requestId, json);

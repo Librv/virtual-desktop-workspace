@@ -175,7 +175,9 @@ QString KWinScripts::query(const QString &kind, QueryCallback callback, int time
 
     PendingQuery pending;
     pending.callback = std::move(callback);
-    pending.scriptName = QStringLiteral("vdw-query-") + requestId;
+    // The pid keeps names unique across restarts: a script left loaded by a
+    // crashed vdwd would block a new one with the same name.
+    pending.scriptName = QStringLiteral("vdw-query-%1-%2").arg(QCoreApplication::applicationPid()).arg(requestId);
     pending.file = m_dir + QStringLiteral("/query-") + requestId + QStringLiteral(".js");
     pending.timeout = new QTimer(this);
     pending.timeout->setSingleShot(true);
