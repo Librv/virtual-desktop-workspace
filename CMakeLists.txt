@@ -20,8 +20,13 @@ include(ECMAddTests)
 include(FeatureSummary)
 
 # Only what is needed so far. Later tasks add their own components here
-# (e.g. KF6 GlobalAccel, KIO, Config, DBusAddons; LayerShellQt).
-find_package(Qt6 ${QT_MIN_VERSION} CONFIG REQUIRED COMPONENTS Core Test)
+# (e.g. KF6 GlobalAccel, KIO; LayerShellQt).
+find_package(Qt6 ${QT_MIN_VERSION} CONFIG REQUIRED COMPONENTS Core DBus Gui Test)
+find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS Config CoreAddons DBusAddons)
+
+add_subdirectory(src/lib)
+add_subdirectory(src/daemon)
+add_subdirectory(src/vdwctl)
 
 if(BUILD_TESTING)
     add_subdirectory(autotests)

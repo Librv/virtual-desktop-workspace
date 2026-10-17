@@ -16,7 +16,7 @@ Status values: `todo`, `in-progress`, `blocked`, `done`.
 | S2 | Spike: radial overlay on LayerShellQt | T0b | B | done |
 | S3 | Spike: KWin script placement via events | T0b | B | done |
 | S4 | Spike: launching and window matching | T0b | B | done |
-| T1 | Daemon skeleton, config, D-Bus API, vdwctl | S1, S3 | | in-progress |
+| T1 | Daemon skeleton, config, D-Bus API, vdwctl | S1, S3 | | done |
 | T2 | Launch and placement engine | T1, S3, S4 | C | todo |
 | T3 | Shortcuts, gesture state machine, OSD | T1, S1 | C | todo |
 | T4 | Radial menu | T1, S2 | C | todo |

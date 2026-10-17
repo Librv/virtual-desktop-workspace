@@ -99,8 +99,15 @@ Geometry=0.5,0,0.5,0.5
 - `Geometry` is `x,y,width,height` as fractions (0 to 1) of the usable area
   (`clientArea(PlacementArea, ...)`, so panels are excluded).
 - Slots are numbered from 0; workspaces are sorted by `Order`, then `Name`.
-- Invalid entries (unknown keys, bad geometry, missing `App`) are skipped with
-  a warning; the rest of the config still loads.
+- Validation (settled in T1): a bad workspace id, slot name, slot geometry or
+  missing `App` skips that workspace or slot with a warning; unknown keys only
+  warn. Geometry values must each be in 0..1 with width and height > 0
+  (x + width may exceed 1). A workspace without valid slots is kept, a
+  missing `Name` falls back to the id, an unknown `DefaultWorkspace` and bad
+  `[General]` values fall back to defaults with a warning. Sorting is
+  `Order`, then `Name` case-insensitively, then id.
+- In `ListWorkspaces`, a slot is `{app, args, geometry: {x, y, width,
+  height}}`.
 
 ### D-Bus API
 
