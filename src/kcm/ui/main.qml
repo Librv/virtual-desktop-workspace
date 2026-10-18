@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
+import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
 import org.kde.kcmutils as KCM
 
@@ -379,9 +380,47 @@ KCM.AbstractKCM {
                                             }
                                             // Fractions of the usable area, edited in thousandths.
                                             QQC2.SpinBox {
+                                                id: spin
                                                 from: geo.modelData.min
                                                 to: 1000
                                                 editable: true
+                                                // The default IntValidator rejects the decimal point.
+                                                validator: RegularExpressionValidator {
+                                                    regularExpression: /[0-9]*([.,][0-9]{0,3})?/
+                                                }
+                                                // Breeze's own field commits on every keystroke, so a typed "0"
+                                                // was clamped and reformatted before the "." could follow.
+                                                // Same field, committed on Enter or focus loss instead.
+                                                contentItem: T.TextField {
+                                                    readonly property TextMetrics _textMetrics: TextMetrics {
+                                                        text: spin.textFromValue(spin.to, spin.locale)
+                                                        font: spin.font
+                                                    }
+                                                    implicitWidth: Math.max(_textMetrics.width + 2, Math.round(contentWidth)) + leftPadding + rightPadding
+                                                    implicitHeight: Math.round(contentHeight) + topPadding + bottomPadding
+                                                    z: 2
+                                                    font: spin.font
+                                                    palette: spin.palette
+                                                    text: spin.displayText
+                                                    color: Kirigami.Theme.textColor
+                                                    selectionColor: Kirigami.Theme.highlightColor
+                                                    selectedTextColor: Kirigami.Theme.highlightedTextColor
+                                                    selectByMouse: true
+                                                    hoverEnabled: false
+                                                    verticalAlignment: Qt.AlignVCenter
+                                                    validator: spin.validator
+                                                    inputMethodHints: Qt.ImhFormattedNumbersOnly
+                                                    onEditingFinished: {
+                                                        // To the model, never to spin.value: assigning it would break its binding.
+                                                        const typed = Math.max(spin.from, Math.min(spin.to, spin.valueFromText(text, spin.locale)));
+                                                        if (typed !== spin.value) {
+                                                            kcm.slots.setField(card.index, geo.modelData.field, typed / 1000);
+                                                        }
+                                                        // Show the clamped, formatted value even when it did not change.
+                                                        text = Qt.binding(() => spin.displayText);
+                                                    }
+                                                    Accessible.name: spin.Accessible.name
+                                                }
                                                 value: Math.round(card[geo.modelData.field] * 1000)
                                                 textFromValue: function (v) {
                                                     return root.formatFraction(v);

@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Librv
 // SPDX-License-Identifier: MIT
 // vdw-ui: the short-lived GUI helper of vdwd (docs/spikes/S5.md). Reads one
-// command per line on stdin and answers on stdout.
+// command per line on stdin and answers on its original stdout (fd 1 goes to
+// stderr, see main()).
 
 #include "execargs.h"
 #include "keytext.h"
@@ -23,14 +24,17 @@
 #include <QTimer>
 
 #include <cstdio>
+#include <fcntl.h>
 #include <unistd.h>
 
 namespace
 {
+FILE *protocolOut = nullptr; ///< the pipe to vdwd, set up in main()
+
 void reply(const QString &line)
 {
-    std::fprintf(stdout, "%s\n", qPrintable(line));
-    std::fflush(stdout);
+    std::fprintf(protocolOut, "%s\n", qPrintable(line));
+    std::fflush(protocolOut);
 }
 
 QString jsonString(const QString &text)
@@ -193,6 +197,14 @@ private:
 
 int main(int argc, char **argv)
 {
+    // Launched apps inherit fd 1 (KProcess forwards it): give them stderr and
+    // keep the replies on a close-on-exec copy, so no app holds the pipe to vdwd.
+    protocolOut = fdopen(fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, 3), "w");
+    if (!protocolOut || dup2(STDERR_FILENO, STDOUT_FILENO) < 0) {
+        std::perror("vdw-ui: cannot set up the reply channel");
+        return 1;
+    }
+
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("vdw-ui"));
     app.setDesktopFileName(QStringLiteral("vdw-ui"));

@@ -12,6 +12,7 @@
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusInterface>
+#include <QDBusMetaType>
 #include <QDBusPendingCall>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
@@ -24,6 +25,7 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QScopeGuard>
 #include <QTest>
 
 #include <unistd.h>
@@ -33,6 +35,27 @@
 namespace
 {
 const QString testService = QStringLiteral("org.kde.vdw.T2test");
+
+// One key sequence of kglobalaccel on the wire: `(ai)`.
+struct KeySequence {
+    QList<int> keys;
+};
+
+QDBusArgument &operator<<(QDBusArgument &argument, const KeySequence &sequence)
+{
+    argument.beginStructure();
+    argument << sequence.keys;
+    argument.endStructure();
+    return argument;
+}
+
+const QDBusArgument &operator>>(const QDBusArgument &argument, KeySequence &sequence)
+{
+    argument.beginStructure();
+    argument >> sequence.keys;
+    argument.endStructure();
+    return argument;
+}
 
 // Receives the window list from the KWin script the test loads.
 class Receiver : public QObject
@@ -49,6 +72,8 @@ public:
     QStringList reports;
 };
 }
+
+Q_DECLARE_METATYPE(KeySequence)
 
 class IntegrationTest : public QObject
 {
@@ -255,6 +280,64 @@ private:
         return r.top() < area.top() + 100 && qAbs(r.center().x() - area.center().x()) < 5 && r.width() < area.width() / 2;
     }
 
+    // Pids of the KWin windows whose resource class is `cls`.
+    QList<qint64> pidsOfClass(const QString &cls)
+    {
+        m_receiver.reports.clear();
+        const QString source = QStringLiteral(
+            "callDBus('org.kde.vdw.T2test', '/T2', 'org.kde.vdw.T2test', 'Report',\n"
+            "  JSON.stringify(workspace.stackingOrder.map(function(w) { return [w.resourceClass, w.pid]; })));\n");
+        QList<qint64> pids;
+        if (!runScript(QStringLiteral("vdw-pids"), source)
+            || !QTest::qWaitFor(
+                [this] {
+                    return !m_receiver.reports.isEmpty();
+                },
+                5000)) {
+            return pids;
+        }
+        for (const QJsonValue &v : QJsonDocument::fromJson(m_receiver.reports.last().toUtf8()).array()) {
+            const QJsonArray a = v.toArray();
+            if (a.at(0).toString() == cls) {
+                pids.append(static_cast<qint64>(a.at(1).toDouble()));
+            }
+        }
+        return pids;
+    }
+
+    // The `a(ai)` of kglobalaccel for at most one chord.
+    static QList<KeySequence> keysArgument(int chord)
+    {
+        return chord == 0 ? QList<KeySequence>() : QList<KeySequence>{{{chord, 0, 0, 0}}};
+    }
+
+    // Calls kglobalaccel of the nested session about the "main" action.
+    QDBusMessage accelCall(const QString &method, const QVariantList &extra)
+    {
+        QDBusMessage message = QDBusMessage::createMethodCall(QStringLiteral("org.kde.kglobalaccel"),
+                                                              QStringLiteral("/kglobalaccel"),
+                                                              QStringLiteral("org.kde.KGlobalAccel"),
+                                                              method);
+        const QStringList id = {QStringLiteral("vdw"),
+                                QStringLiteral("main"),
+                                QStringLiteral("Virtual Desktop Workspace"),
+                                QStringLiteral("Open default workspace, hold for the workspace menu")};
+        message.setArguments(QVariantList{id} + extra);
+        return QDBusConnection::sessionBus().call(message, QDBus::Block, 5000);
+    }
+
+    // First chord of the "main" action's first key sequence, -1 on error.
+    int mainChord()
+    {
+        const QDBusMessage reply = accelCall(QStringLiteral("shortcutKeys"), {});
+        if (reply.type() != QDBusMessage::ReplyMessage) {
+            return -1;
+        }
+        const QList<KeySequence> keys = qdbus_cast<QList<KeySequence>>(reply.arguments().at(0));
+        const int chord = keys.isEmpty() ? 0 : keys.first().keys.value(0);
+        return chord;
+    }
+
     bool closeAll()
     {
         runScript(QStringLiteral("vdw-t3b-close"),
@@ -326,6 +409,8 @@ private Q_SLOTS:
         if (!QDBusConnection::sessionBus().isConnected()) {
             QSKIP("nested session bus is not reachable");
         }
+        qDBusRegisterMetaType<KeySequence>();
+        qDBusRegisterMetaType<QList<KeySequence>>();
         QVERIFY(m_dir.isValid());
 
         QFile cfg(m_dir.filePath(QStringLiteral("vdwrc")));
@@ -424,6 +509,27 @@ private Q_SLOTS:
         QCOMPARE(r.exitCode, 0);
         QTest::qWait(3000);
         QVERIFY(windowsAtSlots(1, 3));
+    }
+
+    // Launched apps must not hold vdw-ui's stdout, which is the pipe to vdwd:
+    // vdw-ui gives them its stderr, which is vdwd's (the test's stderr may be a
+    // pipe too, so compare with that rather than checking for "pipe:").
+    void testLaunchedAppStdoutIsVdwdStderr()
+    {
+        // readlink, since QFileInfo would resolve "pipe:[1]" against the directory.
+        const auto fdTarget = [](qint64 pid, int fd) {
+            char buffer[256];
+            const ssize_t length = ::readlink(QStringLiteral("/proc/%1/fd/%2").arg(pid).arg(fd).toLocal8Bit().constData(), buffer, sizeof(buffer) - 1);
+            return length > 0 ? QString::fromLocal8Bit(buffer, length) : QString();
+        };
+        const QString daemonStderr = fdTarget(m_daemon->processId(), 2);
+        QVERIFY(!daemonStderr.isEmpty());
+        const QList<qint64> pids = pidsOfClass(QStringLiteral("org.kde.konsole"));
+        QVERIFY(!pids.isEmpty());
+        for (const qint64 pid : pids) {
+            const QString target = fdTarget(pid, 1);
+            QVERIFY2(target == daemonStderr, qPrintable(QStringLiteral("pid %1: stdout %2, vdwd stderr %3").arg(pid).arg(target, daemonStderr)));
+        }
     }
 
     void testOpenForce()
@@ -748,6 +854,36 @@ private Q_SLOTS:
         }
     }
 
+    // A key the user picked in System Settings survives a vdwd restart: vdwd
+    // registers its default with IsDefault|NoAutoloading and must not
+    // overwrite the active key.
+    void testUserShortcutSurvivesRestart()
+    {
+        const int original = (Qt::CTRL | Qt::META | Qt::Key_D).toCombined();
+        const int user = (Qt::CTRL | Qt::META | Qt::Key_F).toCombined();
+        QCOMPARE(mainChord(), original);
+        QCOMPARE(accelCall(QStringLiteral("setForeignShortcutKeys"), {QVariant::fromValue(keysArgument(user))}).type(), QDBusMessage::ReplyMessage);
+        QCOMPARE(mainChord(), user);
+        // Restore the default on every exit, also a failed QVERIFY, so later
+        // tests can press Ctrl+Meta+D.
+        const auto restore = qScopeGuard([this, original] {
+            accelCall(QStringLiteral("setForeignShortcutKeys"), {QVariant::fromValue(keysArgument(original))});
+        });
+
+        m_daemon->terminate();
+        QVERIFY(m_daemon->waitForFinished(5000));
+        auto *iface = QDBusConnection::sessionBus().interface();
+        QTRY_VERIFY_WITH_TIMEOUT(!iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")), 5000);
+        m_daemon = std::make_unique<QProcess>();
+        m_daemon->setProcessChannelMode(QProcess::ForwardedChannels);
+        m_daemon->start(QStringLiteral(VDWD_PATH), {QStringLiteral("--config"), m_dir.filePath(QStringLiteral("vdwrc")), QStringLiteral("--debug")});
+        QVERIFY(m_daemon->waitForStarted());
+        QTRY_VERIFY_WITH_TIMEOUT(iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")), 15000);
+        // Registration is asynchronous: give it time to (wrongly) overwrite.
+        QTest::qWait(2000);
+        QCOMPARE(mainChord(), user);
+    }
+
     // Runs last: replaces the daemon with one that has no vdwrc (in its own
     // XDG_CONFIG_HOME) and checks the built-in starting workspace.
     void testDefaultConfigOnFirstStart()
@@ -785,7 +921,9 @@ private Q_SLOTS:
             const QJsonObject slot = slots[i].toObject();
             QCOMPARE(slot[QStringLiteral("app")].toString(), QStringLiteral("org.kde.konsole"));
             const QJsonObject g = slot[QStringLiteral("geometry")].toObject();
-            const QList<double> actual = {g[QStringLiteral("x")].toDouble(), g[QStringLiteral("y")].toDouble(), g[QStringLiteral("width")].toDouble(),
+            const QList<double> actual = {g[QStringLiteral("x")].toDouble(),
+                                          g[QStringLiteral("y")].toDouble(),
+                                          g[QStringLiteral("width")].toDouble(),
                                           g[QStringLiteral("height")].toDouble()};
             QCOMPARE(actual, expected[i]);
         }

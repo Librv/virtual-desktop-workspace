@@ -5,7 +5,6 @@
 
 #include "kwinscripts.h"
 #include "manager.h"
-#include "shortcutkeys.h"
 #include "shortcuts.h"
 #include "uiclient.h"
 
@@ -21,26 +20,10 @@ namespace Vdw
 
 namespace
 {
+/// The Qt::KeyboardModifier bits of `chord` that vdw-ui tracks.
 int modifierMask(int chord)
 {
-    int mask = 0;
-    for (const Qt::Key key : ShortcutKeys::modifierKeys(chord)) {
-        switch (key) {
-        case Qt::Key_Control:
-            mask |= Qt::ControlModifier;
-            break;
-        case Qt::Key_Meta:
-            mask |= Qt::MetaModifier;
-            break;
-        case Qt::Key_Shift:
-            mask |= Qt::ShiftModifier;
-            break;
-        default:
-            mask |= Qt::AltModifier;
-            break;
-        }
-    }
-    return mask;
+    return chord & (Qt::ControlModifier | Qt::MetaModifier | Qt::ShiftModifier | Qt::AltModifier);
 }
 }
 
@@ -225,7 +208,7 @@ void GestureController::showConfirmToast(const QString &id)
     }
     // Only main-shortcut confirms require the modifiers to stay held. The
     // helper fills in {mods} and {key} (it owns the key names, QtGui).
-    const bool holdMods = confirmShortcut.isMain && !ShortcutKeys::modifierKeys(chord).isEmpty();
+    const bool holdMods = confirmShortcut.isMain && modifierMask(chord) != 0;
     const QString text = holdMods ? QStringLiteral("Desktop not empty. Keep holding {mods} and press {key} to set up %1 here.").arg(name)
                                   : QStringLiteral("Desktop not empty. Press {key} again to set up %1 here.").arg(name);
     showToast(icon, text, chord);
