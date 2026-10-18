@@ -19,6 +19,8 @@ struct PendingLaunch {
     QString appId; ///< .desktop id of the launched app
     QRect rect; ///< target rect in pixels
     qint64 launchTimeMs = 0;
+    int group = 0; ///< one id per workspace open
+    int order = 0; ///< slot index within the open, 0 stacks lowest
 };
 
 /// A window the KWin script saw appear.

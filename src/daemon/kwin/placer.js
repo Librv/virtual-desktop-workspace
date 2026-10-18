@@ -15,6 +15,10 @@ function isAppWindow(w) {
     return w.normalWindow && w.minimizable;
 }
 
+// Windows claimed by a workspace open: {w, group, order}. Used to restack
+// the windows of one open in slot order (last slot on top).
+let claimed = [];
+
 workspace.windowAdded.connect(function(w) {
     if (!isAppWindow(w)) {
         return;
@@ -29,7 +33,22 @@ workspace.windowAdded.connect(function(w) {
         if (!reply || w.deleted) {
             return;
         }
+        const claim = JSON.parse(reply);
         // Setting frameGeometry sticks (spike S3).
-        w.frameGeometry = JSON.parse(reply);
+        w.frameGeometry = {x: claim.rect.x, y: claim.rect.y, width: claim.rect.width, height: claim.rect.height};
+        claimed = claimed.filter(function(c) {
+            return !c.w.deleted;
+        });
+        claimed.push({w: w, group: claim.group, order: claim.order});
+        // Windows arrive in any order: raise the group's windows from the
+        // lowest slot up, so the last slot ends on top. Other windows and the
+        // focus are left alone.
+        claimed.filter(function(c) {
+            return c.group === claim.group;
+        }).sort(function(a, b) {
+            return a.order - b.order;
+        }).forEach(function(c) {
+            workspace.raiseWindow(c.w);
+        });
     });
 });

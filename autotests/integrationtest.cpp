@@ -23,9 +23,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QScopeGuard>
 #include <QStandardPaths>
 #include <QTemporaryDir>
-#include <QScopeGuard>
 #include <QTest>
 
 #include <unistd.h>
@@ -134,7 +134,9 @@ private:
         const QString source = QStringLiteral(
             "const d = workspace.currentDesktop;\n"
             "const a = workspace.clientArea(KWin.PlacementArea, workspace.activeScreen, d);\n"
-            "const ws = workspace.windowList().filter(function(w) { return w.normalWindow && w.minimizable; }).map(function(w) {\n"
+            "const st = workspace.stackingOrder;\n"
+            "const ws = workspace.windowList().filter(function(w) { return w.normalWindow && w.minimizable; })\n"
+            "  .sort(function(a, b) { return st.indexOf(a) - st.indexOf(b); }).map(function(w) {\n"
             "  const g = w.frameGeometry;\n"
             "  return {cls: w.resourceClass, x: Math.round(g.x), y: Math.round(g.y), width: Math.round(g.width), height: Math.round(g.height)};\n"
             "});\n"
@@ -422,7 +424,11 @@ private Q_SLOTS:
             "[Workspace][two][Slot][1]\nApp=org.kde.konsole\nGeometry=0.5,0,0.5,0.5\n\n"
             "[Workspace][two][Slot][2]\nApp=org.kde.konsole\nGeometry=0.5,0.5,0.5,0.5\n\n"
             "[Workspace][one]\nName=One\nOrder=0\nIcon=folder\n\n"
-            "[Workspace][one][Slot][0]\nApp=org.kde.konsole\nGeometry=0,0,1,1\n");
+            "[Workspace][one][Slot][0]\nApp=org.kde.konsole\nGeometry=0,0,1,1\n\n"
+            "[Workspace][stack]\nName=Stack\nOrder=2\n\n"
+            "[Workspace][stack][Slot][0]\nApp=org.kde.konsole\nGeometry=0,0,0.6,0.6\n\n"
+            "[Workspace][stack][Slot][1]\nApp=org.kde.konsole\nGeometry=0.2,0.2,0.6,0.6\n\n"
+            "[Workspace][stack][Slot][2]\nApp=org.kde.konsole\nGeometry=0.4,0.4,0.6,0.6\n");
         cfg.close();
 
         auto bus = QDBusConnection::sessionBus();
@@ -459,7 +465,7 @@ private Q_SLOTS:
         const Result r = ctl({QStringLiteral("list")});
         QCOMPARE(r.exitCode, 0);
         const QJsonArray array = QJsonDocument::fromJson(r.out.toUtf8()).array();
-        QCOMPARE(array.size(), 2);
+        QCOMPARE(array.size(), 3);
         QCOMPARE(array[0].toObject()[QStringLiteral("id")].toString(), QStringLiteral("one"));
         QCOMPARE(array[1].toObject()[QStringLiteral("id")].toString(), QStringLiteral("two"));
         QVERIFY(array[1].toObject()[QStringLiteral("isDefault")].toBool());
@@ -544,6 +550,23 @@ private Q_SLOTS:
         const Result r = ctl({QStringLiteral("open"), QStringLiteral("nope"), QStringLiteral("--force")});
         QCOMPARE(r.exitCode, 1);
         QCOMPARE(r.out, QStringLiteral("error: unknown workspace"));
+    }
+
+    // Slots overlap and the windows arrive in any order: they still stack in
+    // slot order, the last slot on top (bottom to top means increasing x).
+    void testOpenStacksInSlotOrder()
+    {
+        QVERIFY(closeAll());
+        QCOMPARE(ctl({QStringLiteral("open"), QStringLiteral("stack")}).out, QStringLiteral("opened"));
+        QTRY_VERIFY_WITH_TIMEOUT(snapshot().windows.size() == 3, 20000);
+        QTest::qWait(1500);
+        const Snapshot snap = snapshot();
+        QCOMPARE(snap.windows.size(), 3);
+        for (int i = 0; i < 3; ++i) {
+            const QRect want = Vdw::Layout::slotRect(snap.area, QRectF(0.2 * i, 0.2 * i, 0.6, 0.6));
+            QVERIFY2(near(snap.windows[i].rect, want), qPrintable(QStringLiteral("stack position %1 is at x=%2").arg(i).arg(snap.windows[i].rect.x())));
+        }
+        QVERIFY(closeAll());
     }
 
     void testReload()
@@ -825,7 +848,7 @@ private Q_SLOTS:
         // The new workspace is in the list, after the others, with the icon of
         // the first slot's app and three slots.
         const QJsonArray list = QJsonDocument::fromJson(ctl({QStringLiteral("list")}).out.toUtf8()).array();
-        QCOMPARE(list.size(), 3);
+        QCOMPARE(list.size(), 4);
         const QJsonObject added = list.last().toObject();
         QCOMPARE(added[QStringLiteral("id")].toString(), QStringLiteral("captured"));
         QCOMPARE(added[QStringLiteral("name")].toString(), QStringLiteral("Captured"));

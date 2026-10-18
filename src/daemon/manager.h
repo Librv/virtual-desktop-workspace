@@ -42,8 +42,9 @@ public:
     /// from the event loop). Used by OpenWorkspace and the gesture controller.
     void open(const QString &id, bool force, const Reply &reply);
 
-    /// ScriptApi::ClaimWindow: the pixel rect JSON `{x, y, width, height}` for
-    /// a window that belongs to a pending launch, else "".
+    /// ScriptApi::ClaimWindow: `{rect: {x, y, width, height}, group, order}`
+    /// (pixel rect, one group per open, slot index) for a window that belongs
+    /// to a pending launch, else "".
     QString claimWindow(const QString &windowJson);
 
 public Q_SLOTS:
@@ -70,6 +71,7 @@ private:
     Launcher *m_launcher;
     Matcher m_matcher;
     int m_nextLaunchId = 0;
+    int m_nextOpenId = 0;
     bool m_opening = false; ///< a non-forced open is between its checks and its launches
 };
 

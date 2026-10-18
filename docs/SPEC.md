@@ -56,6 +56,10 @@ desktops are created.
   per-workspace shortcut, and the radial menu.
 - On confirm, existing windows are left untouched; new windows go into their
   slots even if they overlap existing ones.
+- Where a workspace's own windows overlap, the order of its apps decides:
+  the last app in the list is on top, the first at the bottom. The settings
+  page can move apps up and down the list. Capture saves windows in this
+  order (bottom first).
 
 ## The main shortcut: Ctrl+Meta+D
 

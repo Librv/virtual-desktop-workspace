@@ -166,13 +166,15 @@ void Manager::launchSlots(const Workspace &workspace, const QRect &area, const R
     auto state = std::make_shared<State>();
     state->remaining = workspace.slots.size();
     const int total = workspace.slots.size();
+    const int group = ++m_nextOpenId;
+    int order = 0;
 
     for (const Slot &slot : workspace.slots) {
         // Register before launching: the window can in theory arrive before
         // the job reports its pid. The pid is filled in below.
         const int launchId = ++m_nextLaunchId;
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        m_matcher.addPending({launchId, 0, slot.app, Layout::slotRect(area, slot.geometry), now});
+        m_matcher.addPending({launchId, 0, slot.app, Layout::slotRect(area, slot.geometry), now, group, order++});
         QTimer::singleShot(m_matcher.timeoutMs() + 100, this, &Manager::expirePending);
 
         m_launcher->launch(slot.app, slot.args, [this, state, launchId, total, reply](bool ok, qint64 pid, const QString &error) {
@@ -225,7 +227,8 @@ QString Manager::claimWindow(const QString &windowJson)
                            {QStringLiteral("y"), launch->rect.y()},
                            {QStringLiteral("width"), launch->rect.width()},
                            {QStringLiteral("height"), launch->rect.height()}};
-    return QString::fromUtf8(QJsonDocument(rect).toJson(QJsonDocument::Compact));
+    const QJsonObject reply{{QStringLiteral("rect"), rect}, {QStringLiteral("group"), launch->group}, {QStringLiteral("order"), launch->order}};
+    return QString::fromUtf8(QJsonDocument(reply).toJson(QJsonDocument::Compact));
 }
 
 QString Manager::CaptureCurrentDesktop(const QString &name)

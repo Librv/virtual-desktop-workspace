@@ -17,6 +17,7 @@ private Q_SLOTS:
     void removeClearsDefault();
     void moveAndDefault();
     void slotEditing();
+    void slotMoving();
     void mergeNew();
     void mergeNewKeepsDeletions();
 };
@@ -90,6 +91,41 @@ void WorkspaceModelTest::slotEditing()
 
     m.removeSlot(0, 0);
     QCOMPARE(slots.rowCount(), 0);
+}
+
+void WorkspaceModelTest::slotMoving()
+{
+    WorkspaceModel m;
+    m.addWorkspace("A");
+    for (const char *app : {"a", "b", "c"}) {
+        m.addSlot(0);
+        Slot s = *m.slotAt(0, m.slotCount(0) - 1);
+        s.app = QString::fromLatin1(app);
+        QVERIFY(m.setSlotAt(0, m.slotCount(0) - 1, s));
+    }
+    auto order = [&m]() {
+        QString out;
+        for (int i = 0; i < m.slotCount(0); ++i) {
+            out += m.slotAt(0, i)->app;
+        }
+        return out;
+    };
+    QSignalSpy changed(&m, &WorkspaceModel::changed);
+
+    m.moveSlot(0, 0, 2);
+    QCOMPARE(order(), QStringLiteral("bca"));
+    QCOMPARE(changed.size(), 1);
+    m.moveSlot(0, 2, 0);
+    QCOMPARE(order(), QStringLiteral("abc"));
+    QCOMPARE(changed.size(), 2);
+
+    m.moveSlot(0, 1, 1);
+    m.moveSlot(0, -1, 0);
+    m.moveSlot(0, 0, 3);
+    m.moveSlot(0, 3, 0);
+    m.moveSlot(1, 0, 1);
+    QCOMPARE(order(), QStringLiteral("abc"));
+    QCOMPARE(changed.size(), 2);
 }
 
 void WorkspaceModelTest::mergeNew()

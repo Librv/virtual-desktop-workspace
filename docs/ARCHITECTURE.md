@@ -138,7 +138,7 @@ numbers arrive as int32, so integer parameters are `i`).
 | | `OpenWorkspace(s id, b force) -> s` | `"opened"`, `"busy"` (desktop not empty and not forced), or `"error: ..."` |
 | | `CaptureCurrentDesktop(s name) -> s` | new workspace id, or `"error: ..."` (T6) |
 | | `ReloadConfig()` | re-read `vdwrc`, re-register shortcuts |
-| `/Script`, `io.github.librv.vdw.Script` | `ClaimWindow(s windowJson) -> s` | called by the KWin script on `windowAdded`; returns a rect JSON or `""` |
+| `/Script`, `io.github.librv.vdw.Script` | `ClaimWindow(s windowJson) -> s` | called by the KWin script on `windowAdded`; returns `{rect, group, order}` JSON or `""` |
 | | `QueryResult(s requestId, s json)` | answers of one-shot query scripts |
 | | `CursorPos(i x, i y)` | pointer position for the radial menu center |
 | `/Debug`, `io.github.librv.vdw.Debug` | `Press(s shortcut)`, `Release(s shortcut)`, `ModifiersHeld(b)` | only when started with `--debug`: feed the state machine through the same path as real input; `shortcut` is `main` or a workspace id |
@@ -153,8 +153,12 @@ numbers arrive as int32, so integer parameters are `i`).
   script can get the id of another live one (T2). `start()` runs every
   loaded script that is not running yet. The placer is reloaded when
   `org.kde.KWin` reappears on the bus. On `workspace.windowAdded` it calls `ClaimWindow` with the window's
-  pid, `desktopFileName`, `resourceClass` and `internalId`. If a rect comes
-  back it sets `frameGeometry` (it sticks; no re-apply needed).
+  pid, `desktopFileName`, `resourceClass` and `internalId`. If a match comes
+  back (`{rect, group, order}`: the rect, one id per open, the slot index) it
+  sets `frameGeometry` (it sticks; no re-apply needed), then raises the live
+  windows of that group in slot order with `workspace.raiseWindow`, so the
+  last slot ends on top whatever order the apps map in. Other windows and
+  focus are not touched.
 - **One-shot query scripts** for the emptiness check, the usable area, the
   window list (T6) and the cursor position: loaded, run, they answer through
   `QueryResult`/`CursorPos`, then unloaded.

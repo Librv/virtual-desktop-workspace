@@ -220,6 +220,16 @@ void WorkspaceModel::removeSlot(int row, int index)
     Q_EMIT changed();
 }
 
+void WorkspaceModel::moveSlot(int row, int from, int to)
+{
+    if (from == to || !slotAt(row, from) || !slotAt(row, to)) {
+        return;
+    }
+    m_workspaces[row].slots.move(from, to);
+    Q_EMIT slotsReset(row);
+    Q_EMIT changed();
+}
+
 bool WorkspaceModel::setSlotAt(int row, int index, const Slot &slot)
 {
     if (!slotAt(row, index)) {

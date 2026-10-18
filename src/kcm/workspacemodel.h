@@ -65,13 +65,16 @@ public:
     const Slot *slotAt(int row, int index) const;
     Q_INVOKABLE void addSlot(int row);
     Q_INVOKABLE void removeSlot(int row, int index);
+    /// Move the slot at `from` to position `to` (the last slot is on top when windows overlap).
+    /// Invalid indices and from == to do nothing.
+    Q_INVOKABLE void moveSlot(int row, int from, int to);
     /// Edit one slot in place. Emits changed() but no slotsReset().
     bool setSlotAt(int row, int index, const Slot &slot);
 
 Q_SIGNALS:
     /// Any edit; the KCM marks itself as needing a save.
     void changed();
-    /// Slots were added or removed in `row` (not for edits in place).
+    /// Slots were added, removed or reordered in `row` (not for edits in place).
     void slotsReset(int row);
     void defaultWorkspaceChanged();
 

@@ -288,6 +288,7 @@ KCM.AbstractKCM {
                 }
 
                 Repeater {
+                    id: slotRepeater
                     model: kcm.slots
 
                     delegate: Kirigami.AbstractCard {
@@ -435,6 +436,28 @@ KCM.AbstractKCM {
                                     }
                                 }
                             }
+                            ColumnLayout {
+                                Layout.alignment: Qt.AlignTop
+                                spacing: 0
+                                QQC2.ToolButton {
+                                    icon.name: "go-up"
+                                    display: QQC2.AbstractButton.IconOnly
+                                    text: i18n("Move up")
+                                    enabled: card.index > 0
+                                    onClicked: root.workspaces.moveSlot(root.row, card.index, card.index - 1)
+                                    QQC2.ToolTip.text: text
+                                    QQC2.ToolTip.visible: hovered
+                                }
+                                QQC2.ToolButton {
+                                    icon.name: "go-down"
+                                    display: QQC2.AbstractButton.IconOnly
+                                    text: i18n("Move down")
+                                    enabled: card.index < slotRepeater.count - 1
+                                    onClicked: root.workspaces.moveSlot(root.row, card.index, card.index + 1)
+                                    QQC2.ToolTip.text: text
+                                    QQC2.ToolTip.visible: hovered
+                                }
+                            }
                             QQC2.ToolButton {
                                 Layout.alignment: Qt.AlignTop
                                 icon.name: "edit-delete"
@@ -446,6 +469,14 @@ KCM.AbstractKCM {
                             }
                         }
                     }
+                }
+
+                QQC2.Label {
+                    visible: root.current !== null && slotRepeater.count > 1
+                    text: i18n("Apps lower in the list open on top.")
+                    opacity: 0.7
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
                 }
 
                 QQC2.Button {
