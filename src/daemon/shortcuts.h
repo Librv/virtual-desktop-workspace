@@ -6,18 +6,18 @@
 #include "config.h"
 #include "gesturemachine.h"
 
+#include <QDBusMessage>
 #include <QHash>
-#include <QKeySequence>
 #include <QObject>
 
-class QAction;
+class QDBusServiceWatcher;
 
 namespace Vdw
 {
 
 /// The global shortcuts of component `vdw` in kglobalaccel: the main shortcut
-/// and one per workspace. Reports presses and releases (from
-/// globalShortcutActiveChanged only, S1).
+/// and one per workspace, talked to over raw D-Bus (the KGlobalAccel client
+/// library links QtGui, S5). Reports presses and releases.
 class Shortcuts : public QObject
 {
     Q_OBJECT
@@ -29,20 +29,33 @@ public:
     /// update names, and drop the global shortcut of workspaces that are gone.
     void sync(const Config &config);
 
-    /// The current key sequence of `shortcut` (empty if none is set).
-    QKeySequence sequence(const Vdw::Shortcut &shortcut) const;
+    /// The first chord (Qt key|modifier int) of the current key sequence of
+    /// `shortcut`, 0 if none is set. Read from a cache that follows kglobalaccel.
+    int chord(const Vdw::Shortcut &shortcut) const;
 
 Q_SIGNALS:
     void pressed(const Vdw::Shortcut &shortcut);
     void released(const Vdw::Shortcut &shortcut);
 
-private:
-    QAction *registerAction(const QString &name, const QString &text, const QKeySequence &defaultKey);
-    void removeStaleActions();
-    void renameAction(const QString &name, const QString &text);
+private Q_SLOTS:
+    void onShortcutPressed(const QString &component, const QString &action, qlonglong timestamp);
+    void onShortcutReleased(const QString &component, const QString &action, qlonglong timestamp);
+    void onKeysChanged(const QDBusMessage &message);
 
-    QAction *m_main = nullptr;
-    QHash<QString, QAction *> m_workspaces; ///< by workspace id
+private:
+    struct Action {
+        QString text;
+        int defaultKey = 0;
+    };
+
+    void registerAction(const QString &name, const Action &action);
+    void renameAction(const QString &name, const QString &text);
+    void removeStaleActions();
+    void emitFor(const QString &component, const QString &name, bool pressed);
+
+    QHash<QString, Action> m_actions; ///< by action name ("main", "open-<id>")
+    QHash<QString, int> m_chords; ///< first chord of each action's keys, as kglobalaccel last said
+    QDBusServiceWatcher *m_watcher = nullptr;
 };
 
 }

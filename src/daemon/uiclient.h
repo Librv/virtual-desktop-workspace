@@ -31,7 +31,7 @@ public:
     explicit UiClient(QObject *parent = nullptr);
 
     /// Starts the helper and tracks these Qt::KeyboardModifier bits; it
-    /// answers with modifiersHeldChanged at once and on every change.
+    /// answers with modifiersHeldChanged after a 150 ms settle and on every change.
     void trackModifiers(int mask);
     /// `center` x = -1 centers the menu on the screen; items are {id,name,icon}.
     void showMenu(QPoint center, const QJsonArray &items);
@@ -39,7 +39,9 @@ public:
     /// `callback` gets the id under the pointer, empty for none. Always
     /// called, asynchronously (empty when there is no helper or it dies).
     void select(SelectCallback callback);
-    void showToast(const QString &icon, const QString &text);
+    /// `text` may contain {mods} and {key}, which the helper fills in from
+    /// `chord` (a Qt key|modifier int, 0 for none).
+    void showToast(const QString &icon, const QString &text, int chord = 0);
     void hideToast();
     /// `callback` is called exactly once, also when the helper cannot run.
     void launch(const QString &app, const QString &args, LaunchCallback callback);
@@ -62,7 +64,6 @@ private:
     bool m_ready = false;
     QStringList m_queue; ///< lines waiting for `ready`
     QByteArray m_output;
-    int m_mask = -1;
     bool m_gestureActive = false;
     bool m_toastVisible = false;
     QList<SelectCallback> m_selects;

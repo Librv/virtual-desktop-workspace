@@ -120,6 +120,11 @@ public:
     {
         return m_state;
     }
+    /// The shortcut of the current gesture (valid unless Idle).
+    Shortcut pressedShortcut() const
+    {
+        return m_pressed;
+    }
     /// The shortcut whose press confirms the last Open(id, false).
     Shortcut confirmShortcut() const
     {

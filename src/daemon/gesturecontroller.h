@@ -41,7 +41,7 @@ private:
     void hideMenu();
     void showConfirmToast(const QString &id);
     void showNoDefaultToast();
-    void showToast(const QString &icon, const QString &text);
+    void showToast(const QString &icon, const QString &text, int chord = 0);
     void hideToast();
     void refreshConfig();
 

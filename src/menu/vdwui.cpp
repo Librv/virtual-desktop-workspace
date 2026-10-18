@@ -4,6 +4,7 @@
 // command per line on stdin and answers on stdout.
 
 #include "execargs.h"
+#include "keytext.h"
 #include "radialmenu.h"
 #include "toast.h"
 
@@ -19,6 +20,7 @@
 #include <QQuickWindow>
 #include <QScreen>
 #include <QSocketNotifier>
+#include <QTimer>
 
 #include <cstdio>
 #include <unistd.h>
@@ -43,6 +45,7 @@ public:
     Helper()
     {
         connect(&m_modifierInfo, &KModifierKeyInfo::keyPressed, this, [this] {
+            ++m_modsGeneration; // skips the pending initial report
             reportModifiers(false);
         });
         m_notifier = new QSocketNotifier(STDIN_FILENO, QSocketNotifier::Read, this);
@@ -76,12 +79,19 @@ private:
         const QString rest = line.section(QLatin1Char(' '), 1);
         if (command == QLatin1String("mods")) {
             m_mask = rest.toInt();
-            reportModifiers(true);
+            // shortcut: fixed 150 ms settle for the Wayland key-state protocol, upgrade if KModifierKeyInfo exposes a ready signal
+            const int generation = ++m_modsGeneration;
+            QTimer::singleShot(150, this, [this, generation] {
+                if (generation == m_modsGeneration) { // a keyPressed change reported first otherwise
+                    reportModifiers(true);
+                }
+            });
         } else if (command == QLatin1String("menu")) {
             QVector<RadialMenu::Item> items;
             for (const QJsonValue &value : QJsonDocument::fromJson(rest.section(QLatin1Char(' '), 2).toUtf8()).array()) {
                 const QJsonObject item = value.toObject();
-                items.append({item.value(QLatin1String("id")).toString(), item.value(QLatin1String("name")).toString(), item.value(QLatin1String("icon")).toString()});
+                items.append(
+                    {item.value(QLatin1String("id")).toString(), item.value(QLatin1String("name")).toString(), item.value(QLatin1String("icon")).toString()});
             }
             QPoint center(rest.section(QLatin1Char(' '), 0, 0).toInt(), rest.section(QLatin1Char(' '), 1, 1).toInt());
             if (center.x() < 0) {
@@ -97,7 +107,13 @@ private:
             reply(QStringLiteral("selected ") + (id.isEmpty() ? QStringLiteral("-") : id));
         } else if (command == QLatin1String("toast")) {
             const QJsonObject toast = QJsonDocument::fromJson(rest.toUtf8()).object();
-            m_toast.show(toast.value(QLatin1String("icon")).toString(), toast.value(QLatin1String("text")).toString());
+            const int chord = toast.value(QLatin1String("chord")).toInt();
+            const QString key = Vdw::ShortcutKeys::keyText(chord);
+            const QString text = toast.value(QLatin1String("text"))
+                                     .toString()
+                                     .replace(QLatin1String("{mods}"), Vdw::ShortcutKeys::modifierText(chord))
+                                     .replace(QLatin1String("{key}"), key.isEmpty() ? QStringLiteral("the shortcut") : key);
+            m_toast.show(toast.value(QLatin1String("icon")).toString(), text);
         } else if (command == QLatin1String("hidetoast")) {
             m_toast.hide();
         } else if (command == QLatin1String("launch")) {
@@ -115,7 +131,10 @@ private:
         const struct {
             Qt::KeyboardModifier modifier;
             Qt::Key key;
-        } table[] = {{Qt::ControlModifier, Qt::Key_Control}, {Qt::MetaModifier, Qt::Key_Meta}, {Qt::ShiftModifier, Qt::Key_Shift}, {Qt::AltModifier, Qt::Key_Alt}};
+        } table[] = {{Qt::ControlModifier, Qt::Key_Control},
+                     {Qt::MetaModifier, Qt::Key_Meta},
+                     {Qt::ShiftModifier, Qt::Key_Shift},
+                     {Qt::AltModifier, Qt::Key_Alt}};
         for (const auto &entry : table) {
             if (m_mask & entry.modifier) {
                 held = held && m_modifierInfo.isKeyPressed(entry.key);
@@ -167,6 +186,7 @@ private:
     QSocketNotifier *m_notifier = nullptr;
     QByteArray m_buffer;
     int m_mask = 0;
+    int m_modsGeneration = 0;
     bool m_held = true;
 };
 }

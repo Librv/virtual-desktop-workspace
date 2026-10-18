@@ -30,7 +30,6 @@ UiClient::UiClient(QObject *parent)
 
 void UiClient::trackModifiers(int mask)
 {
-    m_mask = mask;
     send(QStringLiteral("mods %1").arg(mask));
 }
 
@@ -56,10 +55,10 @@ void UiClient::select(SelectCallback callback)
     send(QStringLiteral("select"));
 }
 
-void UiClient::showToast(const QString &icon, const QString &text)
+void UiClient::showToast(const QString &icon, const QString &text, int chord)
 {
     m_toastVisible = true;
-    send(QStringLiteral("toast ") + compact({{QStringLiteral("icon"), icon}, {QStringLiteral("text"), text}}));
+    send(QStringLiteral("toast ") + compact({{QStringLiteral("icon"), icon}, {QStringLiteral("text"), text}, {QStringLiteral("chord"), chord}}));
 }
 
 void UiClient::hideToast()
@@ -104,9 +103,6 @@ void UiClient::startProcess()
     m_ready = false;
     m_output.clear();
     m_queue.clear();
-    if (m_mask >= 0) {
-        m_queue.append(QStringLiteral("mods %1").arg(m_mask));
-    }
     process->setProcessChannelMode(QProcess::ForwardedErrorChannel);
     connect(process, &QProcess::readyReadStandardOutput, this, [this, process] {
         readOutput(process);
@@ -205,8 +201,16 @@ void UiClient::quitIfIdle()
     m_process = nullptr;
     process->disconnect(this);
     connect(process, &QProcess::finished, process, &QObject::deleteLater);
-    if (m_ready) {
+    if (process->state() == QProcess::NotRunning) {
+        process->deleteLater(); // failed to start: finished never comes
+    } else if (m_ready) {
         process->write("quit\n");
+        // Gone with the process (deleteLater on finished) if it quits in time.
+        QTimer::singleShot(2000, process, [process] {
+            if (process->state() != QProcess::NotRunning) {
+                process->kill();
+            }
+        });
     } else {
         process->kill(); // nothing is on screen before `ready`
     }

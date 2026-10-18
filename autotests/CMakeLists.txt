@@ -32,7 +32,7 @@ ecm_add_test(matchertest.cpp
 
 ecm_add_test(shortcutkeystest.cpp
     TEST_NAME shortcutkeystest
-    LINK_LIBRARIES Qt6::Core Qt6::Test vdwcore
+    LINK_LIBRARIES Qt6::Core Qt6::Gui Qt6::Test vdwcore vdwmenu
 )
 
 # Skips unless run inside the nested session:

@@ -21,10 +21,10 @@ namespace Vdw
 
 namespace
 {
-int modifierMask(const QKeySequence &sequence)
+int modifierMask(int chord)
 {
     int mask = 0;
-    for (const Qt::Key key : ShortcutKeys::modifierKeys(sequence)) {
+    for (const Qt::Key key : ShortcutKeys::modifierKeys(chord)) {
         switch (key) {
         case Qt::Key_Control:
             mask |= Qt::ControlModifier;
@@ -88,23 +88,36 @@ void GestureController::press(const Vdw::Shortcut &shortcut)
 {
     if (shortcut.isMain) {
         // Up before the hold threshold, and tracking modifiers for the whole gesture.
-        m_ui->trackModifiers(modifierMask(m_shortcuts->sequence(shortcut)));
+        m_ui->trackModifiers(modifierMask(m_shortcuts->chord(shortcut)));
+        // A shortcut that just fired has its modifiers held (a debug override stays).
+        // Not through execute(): its setGestureActive(false) in Idle would kill
+        // the helper just started. Setting held yields no commands.
+        if (!m_debugModifiers) {
+            m_machine.modifiersHeld(true);
+        }
+    }
+    if (m_machine.state() == Vdw::GestureMachine::State::AwaitingMenuResult) {
+        hideMenu(); // the pending select is dropped as stale
     }
     execute(m_machine.press(shortcut));
 }
 
 void GestureController::release(const Vdw::Shortcut &shortcut)
 {
-    // Asked before the commands run: they may hide the menu, and the helper
-    // handles lines in order.
-    const int sequence = ++m_releaseSequence;
-    m_ui->select([this, sequence](const QString &selected) {
-        // Another release or a state change meanwhile: this answer is stale.
-        if (sequence == m_releaseSequence && m_machine.state() == Vdw::GestureMachine::State::AwaitingMenuResult) {
-            // Empty (dead zone, or the menu is not up yet) cancels.
-            execute(m_machine.menuResult(selected.isEmpty() ? std::nullopt : std::optional<QString>(selected)));
-        }
-    });
+    // Only a release the machine acts on asks for the selection. Asked before
+    // the commands run: they may hide the menu, and the helper handles lines in order.
+    if (m_machine.state() == Vdw::GestureMachine::State::Menu && shortcut == m_machine.pressedShortcut()) {
+        const int sequence = ++m_releaseSequence;
+        m_ui->select([this, sequence](const QString &selected) {
+            // Another release or a state change meanwhile: this answer is stale.
+            if (sequence == m_releaseSequence && m_machine.state() == Vdw::GestureMachine::State::AwaitingMenuResult) {
+                // Empty (dead zone, or the menu is not up yet) cancels.
+                execute(m_machine.menuResult(selected.isEmpty() ? std::nullopt : std::optional<QString>(selected)));
+            } else if (m_machine.state() != Vdw::GestureMachine::State::Menu) {
+                hideMenu(); // do not leave the menu up
+            }
+        });
+    }
     execute(m_machine.release(shortcut));
 }
 
@@ -206,19 +219,16 @@ void GestureController::showConfirmToast(const QString &id)
     const QString icon = workspace && !workspace->icon.isEmpty() ? workspace->icon : QStringLiteral("virtual-desktops");
 
     const Vdw::Shortcut confirmShortcut = m_machine.confirmShortcut();
-    QKeySequence sequence = m_shortcuts->sequence(confirmShortcut);
-    if (sequence.isEmpty()) {
-        sequence = m_shortcuts->sequence(Vdw::Shortcut::main());
+    int chord = m_shortcuts->chord(confirmShortcut);
+    if (chord == 0) {
+        chord = m_shortcuts->chord(Vdw::Shortcut::main());
     }
-    // Only main-shortcut confirms require the modifiers to stay held.
-    const QString mods = confirmShortcut.isMain ? ShortcutKeys::modifierText(sequence) : QString();
-    QString key = ShortcutKeys::keyText(sequence);
-    if (key.isEmpty()) {
-        key = QStringLiteral("the shortcut");
-    }
-    const QString text = mods.isEmpty() ? QStringLiteral("Desktop not empty. Press %1 again to set up %2 here.").arg(key, name)
-                                        : QStringLiteral("Desktop not empty. Keep holding %1 and press %2 to set up %3 here.").arg(mods, key, name);
-    showToast(icon, text);
+    // Only main-shortcut confirms require the modifiers to stay held. The
+    // helper fills in {mods} and {key} (it owns the key names, QtGui).
+    const bool holdMods = confirmShortcut.isMain && !ShortcutKeys::modifierKeys(chord).isEmpty();
+    const QString text = holdMods ? QStringLiteral("Desktop not empty. Keep holding {mods} and press {key} to set up %1 here.").arg(name)
+                                  : QStringLiteral("Desktop not empty. Press {key} again to set up %1 here.").arg(name);
+    showToast(icon, text, chord);
 }
 
 void GestureController::showNoDefaultToast()
@@ -228,11 +238,11 @@ void GestureController::showNoDefaultToast()
     m_toastTimer->start();
 }
 
-void GestureController::showToast(const QString &icon, const QString &text)
+void GestureController::showToast(const QString &icon, const QString &text, int chord)
 {
     qCInfo(VDW_DAEMON) << "gesture: toast" << text;
     m_toastTimer->stop();
-    m_ui->showToast(icon, text);
+    m_ui->showToast(icon, text, chord);
 }
 
 void GestureController::hideToast()
