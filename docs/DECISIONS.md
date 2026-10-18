@@ -36,6 +36,7 @@ rewrite old entries, add a new one that supersedes them.
 | 29 | 2026-10-17 | Capture leaves out the windows of the D-Bus caller's process (System Settings, `kcmshell6`); `vdwctl capture` keeps the terminal it runs in | The settings window was saved as a slot of every workspace captured from the KCM. User request |
 | 30 | 2026-10-17 | The workspace placement preview (KCM only) draws slots on a mini screen at the current screen's aspect ratio, one fixed color per slot, not from the window palette | Screen size is not stored, only fractions. Palette colors dim when System Settings is unfocused. User does not want it in the radial menu |
 | 31 | 2026-10-17 | vdwd draws the menu and toast with Qt Quick's software renderer (`QSGRendererInterface::Software`) | With the GPU renderer Mesa stays loaded after the first menu: private memory went from 7 MB to 46 MB, software keeps it at 13 MB. Screenshots looked the same (nested session) |
+| 32 | 2026-10-18 | vdwd has no Qt GUI: menu, toast, modifier tracking and launching run in a short-lived `vdw-ui` helper (one per gesture or launch); shortcuts go over raw D-Bus to kglobalaccel (S5) | Idle vdwd drops from 49 MB RSS (7 MB private) to 18 MB (1.6 MB) and stays there after menu use; the 65 ms helper start hides behind the 250 ms hold threshold. User tested it live |
 
 ## Open
 
