@@ -243,10 +243,10 @@ private:
         return rects;
     }
 
-    // True if exactly one vdwd surface is up and it sits at the top, centered.
+    // True if exactly one vdw-ui surface is up and it sits at the top, centered.
     bool toastAtTopCenter()
     {
-        const QList<QRectF> rects = geometriesOfClass(QStringLiteral("vdwd"));
+        const QList<QRectF> rects = geometriesOfClass(QStringLiteral("vdw-ui"));
         if (rects.size() != 1) {
             return false;
         }
@@ -492,15 +492,15 @@ private Q_SLOTS:
     void testBusyShowsToastAndModifierReleaseHidesIt()
     {
         QVERIFY(windowsAtSlots(2, 6));
-        QCOMPARE(windowsOfClass(QStringLiteral("vdwd")), 0);
+        QCOMPARE(windowsOfClass(QStringLiteral("vdw-ui")), 0);
         debugCall(QStringLiteral("ModifiersHeld"), {true});
         tap(QStringLiteral("main"));
         QTRY_VERIFY_WITH_TIMEOUT(toastAtTopCenter(), 1800);
         debugCall(QStringLiteral("ModifiersHeld"), {false});
-        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdw-ui")), 0, 10000);
         tap(QStringLiteral("main"));
         QTest::qWait(1000);
-        QCOMPARE(windowsOfClass(QStringLiteral("vdwd")), 0);
+        QCOMPARE(windowsOfClass(QStringLiteral("vdw-ui")), 0);
         QVERIFY(windowsAtSlots(2, 6));
     }
 
@@ -510,7 +510,7 @@ private Q_SLOTS:
         debugCall(QStringLiteral("ModifiersHeld"), {true});
         tap(QStringLiteral("main"));
         QTRY_VERIFY_WITH_TIMEOUT(toastAtTopCenter(), 1800);
-        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdw-ui")), 0, 10000);
         debugCall(QStringLiteral("ModifiersHeld"), {false});
         QVERIFY(windowsAtSlots(2, 6));
     }
@@ -519,13 +519,32 @@ private Q_SLOTS:
     // dead zone cancels and opens nothing.
     void testHoldShowsMenuAndCancels()
     {
-        QCOMPARE(windowsOfClass(QStringLiteral("vdwd")), 0);
+        QCOMPARE(windowsOfClass(QStringLiteral("vdw-ui")), 0);
         debugCall(QStringLiteral("Press"), {QStringLiteral("main")});
-        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 1, 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdw-ui")), 1, 10000);
         debugCall(QStringLiteral("Release"), {QStringLiteral("main")});
-        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdw-ui")), 0, 10000);
         QTest::qWait(2000);
         QVERIFY(windowsAtSlots(2, 6));
+    }
+
+    // The helper is short-lived: no vdw-ui process of this build once a
+    // gesture (menu) and a toast are over.
+    void testNoHelperLeftAfterGesture()
+    {
+        const auto helperRunning = [] {
+            // pgrep -f on the full path: never matches an installed vdw-ui of the live session.
+            QProcess pgrep;
+            pgrep.setStandardOutputFile(QProcess::nullDevice());
+            pgrep.start(QStringLiteral("pgrep"), {QStringLiteral("-f"), QStringLiteral(VDWUI_PATH)});
+            return pgrep.waitForFinished() && pgrep.exitCode() == 0;
+        };
+        QVERIFY(!helperRunning());
+        debugCall(QStringLiteral("Press"), {QStringLiteral("main")});
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdw-ui")), 1, 10000);
+        QVERIFY(helperRunning());
+        debugCall(QStringLiteral("Release"), {QStringLiteral("main")});
+        QTRY_VERIFY_WITH_TIMEOUT(!helperRunning(), 10000);
     }
 
     // A workspace shortcut opens its own workspace and never shows the menu,
@@ -535,7 +554,7 @@ private Q_SLOTS:
         QVERIFY(closeAll());
         debugCall(QStringLiteral("Press"), {QStringLiteral("one")});
         QTest::qWait(700);
-        QCOMPARE(windowsOfClass(QStringLiteral("vdwd")), 0);
+        QCOMPARE(windowsOfClass(QStringLiteral("vdw-ui")), 0);
         debugCall(QStringLiteral("Release"), {QStringLiteral("one")});
         QTRY_VERIFY_WITH_TIMEOUT(oneWindowFillsArea(), 20000);
         QTest::qWait(1500);
@@ -612,13 +631,13 @@ private Q_SLOTS:
                                    QStringLiteral("100")};
         auto keys = startHelper(inject, steps);
         QVERIFY(keys);
-        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 1, 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdw-ui")), 1, 10000);
         QVERIFY(moveTo(cx, cy - 120));
         QVERIFY(moveTo(cx, cy - 200));
         QVERIFY(keys->waitForFinished(20000));
         QCOMPARE(keys->exitCode(), 0);
         QTRY_VERIFY_WITH_TIMEOUT(oneWindowFillsArea(), 20000);
-        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdw-ui")), 0, 10000);
     }
 
     // Best effort: a menu pick on a busy desktop shows the toast, and letting
@@ -658,13 +677,13 @@ private Q_SLOTS:
                                    QStringLiteral("100")};
         auto keys = startHelper(inject, steps);
         QVERIFY(keys);
-        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 1, 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdw-ui")), 1, 10000);
         QVERIFY(moveTo(cx, cy - 120));
         QVERIFY(moveTo(cx, cy - 200));
         QTRY_VERIFY_WITH_TIMEOUT(toastAtTopCenter(), 20000);
         QVERIFY(keys->waitForFinished(20000));
         QCOMPARE(keys->exitCode(), 0);
-        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdwd")), 0, 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(windowsOfClass(QStringLiteral("vdw-ui")), 0, 10000);
         QVERIFY(oneWindowFillsArea());
     }
 

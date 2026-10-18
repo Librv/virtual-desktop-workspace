@@ -6,19 +6,17 @@
 #include "kwinscripts.h"
 #include "launcher.h"
 #include "manager.h"
-#include "radialmenu.h"
 #include "shortcuts.h"
-#include "toast.h"
+#include "uiclient.h"
 
 #include "configwriter.h"
 
 #include <KConfig>
-#include <KDBusService>
 
 #include <QCommandLineParser>
+#include <QCoreApplication>
 #include <QDBusConnection>
 #include <QFile>
-#include <QGuiApplication>
 #include <QStandardPaths>
 
 namespace
@@ -46,11 +44,9 @@ void writeDefaultConfigIfMissing()
 
 int main(int argc, char *argv[])
 {
-    QGuiApplication app(argc, argv);
-    // KDBusService derives its name from these: io.github.librv.vdw
-    QGuiApplication::setApplicationName(QStringLiteral("vdw"));
-    QGuiApplication::setOrganizationDomain(QStringLiteral("librv.github.io"));
-    QGuiApplication::setQuitLockEnabled(false); // windowless daemon
+    QCoreApplication app(argc, argv);
+    QCoreApplication::setApplicationName(QStringLiteral("vdw"));
+    QCoreApplication::setOrganizationDomain(QStringLiteral("librv.github.io"));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Virtual Desktop Workspace daemon"));
@@ -66,13 +62,12 @@ int main(int argc, char *argv[])
     }
 
     Vdw::KWinScripts scripts;
-    Vdw::Launcher launcher;
+    Vdw::UiClient ui;
+    Vdw::Launcher launcher(&ui);
     Vdw::Manager manager(parser.value(configOption), &scripts, &launcher);
     Vdw::ScriptApi script(&manager, &scripts);
     Vdw::Shortcuts shortcuts;
-    RadialMenu menu;
-    Toast toast;
-    Vdw::GestureController controller(&manager, &shortcuts, &scripts, &menu, &toast);
+    Vdw::GestureController controller(&manager, &shortcuts, &scripts, &ui);
     Vdw::DebugApi debug(&controller);
 
     QDBusConnection bus = QDBusConnection::sessionBus();
@@ -89,7 +84,10 @@ int main(int argc, char *argv[])
     // Claim the service name only after the objects exist, so a client that
     // reacts to the name appearing never sees UnknownObject. A second
     // instance exits here.
-    KDBusService service(KDBusService::Unique);
+    if (!bus.registerService(Vdw::DBusNames::service)) {
+        qCritical("vdwd: %s is already running", Vdw::DBusNames::service.data());
+        return 1;
+    }
 
     // Registers the global shortcuts; only after the name is ours, so a second
     // instance never touches them.

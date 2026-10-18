@@ -3,18 +3,13 @@
 
 #include "shortcutkeys.h"
 
-#include <QStringList>
-
 namespace Vdw::ShortcutKeys
 {
 
-QList<Qt::Key> modifierKeys(const QKeySequence &sequence)
+QList<Qt::Key> modifierKeys(int chord)
 {
     QList<Qt::Key> keys;
-    if (sequence.isEmpty()) {
-        return keys;
-    }
-    const Qt::KeyboardModifiers modifiers = sequence[0].keyboardModifiers();
+    const Qt::KeyboardModifiers modifiers = Qt::KeyboardModifiers::fromInt(chord & Qt::KeyboardModifierMask);
     if (modifiers.testFlag(Qt::ControlModifier)) {
         keys.append(Qt::Key_Control);
     }
@@ -28,36 +23,6 @@ QList<Qt::Key> modifierKeys(const QKeySequence &sequence)
         keys.append(Qt::Key_Alt);
     }
     return keys;
-}
-
-QString keyText(const QKeySequence &sequence)
-{
-    if (sequence.isEmpty()) {
-        return {};
-    }
-    return QKeySequence(sequence[0].key()).toString(QKeySequence::PortableText);
-}
-
-QString modifierText(const QKeySequence &sequence)
-{
-    QStringList names;
-    for (const Qt::Key key : modifierKeys(sequence)) {
-        switch (key) {
-        case Qt::Key_Control:
-            names << QStringLiteral("Ctrl");
-            break;
-        case Qt::Key_Meta:
-            names << QStringLiteral("Meta");
-            break;
-        case Qt::Key_Shift:
-            names << QStringLiteral("Shift");
-            break;
-        default:
-            names << QStringLiteral("Alt");
-            break;
-        }
-    }
-    return names.join(QLatin1Char('+'));
 }
 
 }

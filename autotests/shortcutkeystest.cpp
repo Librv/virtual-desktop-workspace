@@ -2,10 +2,22 @@
 // SPDX-License-Identifier: MIT
 
 #include "shortcutkeys.h"
+#include "keytext.h"
+
+#include <QKeySequence>
 
 #include <QTest>
 
 using namespace Vdw;
+
+namespace
+{
+int chord(const QString &sequence)
+{
+    const QKeySequence keys(sequence);
+    return keys.isEmpty() ? 0 : keys[0].toCombined();
+}
+}
 
 class ShortcutKeysTest : public QObject
 {
@@ -27,7 +39,7 @@ private Q_SLOTS:
     {
         QFETCH(QString, sequence);
         QFETCH(QList<Qt::Key>, keys);
-        QCOMPARE(ShortcutKeys::modifierKeys(QKeySequence(sequence)), keys);
+        QCOMPARE(ShortcutKeys::modifierKeys(chord(sequence)), keys);
     }
 
     void testKeyText_data()
@@ -42,7 +54,7 @@ private Q_SLOTS:
     {
         QFETCH(QString, sequence);
         QFETCH(QString, text);
-        QCOMPARE(ShortcutKeys::keyText(QKeySequence(sequence)), text);
+        QCOMPARE(ShortcutKeys::keyText(chord(sequence)), text);
     }
 
     void testModifierText_data()
@@ -60,7 +72,7 @@ private Q_SLOTS:
     {
         QFETCH(QString, sequence);
         QFETCH(QString, text);
-        QCOMPARE(ShortcutKeys::modifierText(QKeySequence(sequence)), text);
+        QCOMPARE(ShortcutKeys::modifierText(chord(sequence)), text);
     }
 };
 

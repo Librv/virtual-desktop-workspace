@@ -14,16 +14,16 @@ packaging task (T7) replaces it.
 ## Components
 
 ```
-                 Ctrl+Meta+D press/release
-  kglobalaccel  ───────────────────────────►  vdwd (daemon, C++/Qt6/KF6)
-  KModifierKeyInfo ── Ctrl/Meta held ─────────►│  gesture state machine
+                 Ctrl+Meta+D press/release (D-Bus)
+  kglobalaccel  ───────────────────────────►  vdwd (daemon, QtCore/QtDBus only)
+                                               │  gesture state machine
                                                │  config (KConfig)
-   Plasma OSD   ◄── "desktop not empty" ───────┤
+   vdw-ui       ◄── stdin/stdout lines ───────►│  starts one helper per
+   (per gesture: radial menu, toast,           │  gesture or launch
+    Ctrl/Meta held, KIO launching)             │
                                                │
-   radial menu  ◄── show / hide ───────────────┤  (QML, LayerShellQt overlay)
-                                               │
-   KWin script  ──► ClaimWindow / results ────►│  launches apps via
-   (in KWin)    ◄── placement rect ────────────┤  KIO::ApplicationLauncherJob
+   KWin script  ──► ClaimWindow / results ────►│
+   (in KWin)    ◄── placement rect ────────────┤
                                                │
    vdwctl, KCM  ◄────────── D-Bus API ─────────┘
 ```
@@ -34,18 +34,26 @@ C++ / Qt 6 / KDE Frameworks 6, started at login via XDG autostart (or a
 systemd user unit), plus a D-Bus `.service` file so a `callDBus` from the KWin
 script can start it.
 
-- **Shortcuts (S1):** one component `vdw` in KGlobalAccel, one `QAction` per
-  shortcut (main shortcut plus one per workspace), `setAutoRepeat(false)`,
-  registered with `setDefaultShortcut(..., NoAutoloading)` and
-  `setShortcut(..., Autoloading)` so edits made in System Settings survive
-  restarts. Never call `removeAllShortcuts` on exit (it deletes the user's
-  bindings).
-- **Gesture input (S1):** `KGlobalAccel::globalShortcutActiveChanged(QAction*,
-  bool)` only: true is press, false is release. The release fires when any key
-  of the chord goes up. `triggered` is ignored (auto-repeat only produces
-  `triggered`). Ctrl/Meta held state comes from `KModifierKeyInfo::keyPressed`
-  (works on Wayland via KWin's keystate protocol, 0 to 30 ms lag); the
-  modifier set is derived from the configured `QKeySequence`, not hard coded.
+- **No Qt GUI (S5):** vdwd is a `QCoreApplication` and links only Qt
+  Core/DBus and KF6 ConfigCore, CoreAddons and Service (KF6 GlobalAccel,
+  DBusAddons, GuiAddons and KIOGui all pull in libQt6Gui). Everything that
+  needs a GUI or Wayland runs in `vdw-ui` (below). It registers its D-Bus
+  name with plain `registerService` and exits if the name is taken.
+- **Shortcuts (S1, S5):** one component `vdw` in kglobalaccel, one action per
+  shortcut (main shortcut plus one per workspace), registered over raw D-Bus
+  (`org.kde.kglobalaccel` `/kglobalaccel`): `doRegister`, then
+  `setShortcutKeys` with IsDefault|NoAutoloading (12) for the default and
+  SetPresent (2) to activate, so edits made in System Settings survive
+  restarts. Key sequences are `a(ai)` of Qt key|modifier ints. vdwd caches
+  each action's keys from the replies and from `yourShortcutsChanged`, and
+  re-registers when kglobalaccel reappears. Never remove the user's bindings
+  on exit.
+- **Gesture input (S1, S5):** `globalShortcutPressed` / `globalShortcutReleased`
+  on `/component/vdw`. The release fires when any key of the chord goes up.
+  Ctrl/Meta held state comes from `KModifierKeyInfo` in `vdw-ui` (Wayland
+  keystate protocol, reported 150 ms after start, then on every change); vdwd
+  assumes held at a main press. The modifier set is derived from the
+  configured key sequence, not hard coded.
   Never use kglobalaccel's `invokeShortcut` (press without release, swallows
   the next real press).
 - **Gesture state machine (S1):** pure logic, no Qt GUI, injectable clock,
@@ -61,12 +69,21 @@ script can start it.
     when picking).
   - Must tolerate release without press, press without release, and stale
     timers (generation counters).
-- **Launching (S4):** `KIO::ApplicationLauncherJob` with a copy of the app's
-  `KService` whose `Exec` gets the slot's extra args appended. The pid is read
-  in the job's `result` handler. A windowless Qt app needs
-  `setQuitLockEnabled(false)` or it quits when the first job ends.
-- **OSD:** Plasma's on-screen display over D-Bus (`org.kde.plasmashell`,
-  `/org/kde/osdService`, `org.kde.osdService.showText(icon, text)`).
+- **Launching (S4, S5):** done by `vdw-ui` with `KIO::ApplicationLauncherJob`
+  and a copy of the app's `KService` whose `Exec` gets the slot's extra args
+  appended (KIO keeps the systemd scope, activation token and field codes).
+  The pid is read in the job's `result` handler and sent back to vdwd.
+- **Toast:** our own layer-shell toast at the top center (decision 27), shown
+  by `vdw-ui`.
+
+### vdw-ui: the GUI helper (S5)
+
+Short-lived `QGuiApplication` with the software scene graph renderer. vdwd
+starts it next to its own binary on a main-shortcut press (about 65 ms, so it
+is up before the 250 ms hold threshold) or when it needs a toast or a launch,
+and sends `quit` once the gesture is idle, no toast is visible and no launch
+is pending (killed after 2 s if it does not exit). It exits on stdin EOF, so
+it never outlives vdwd. The line protocol is in `docs/spikes/S5.md`.
 
 ### Config
 
@@ -168,7 +185,7 @@ on them.
 
 ### Radial menu (S2)
 
-QML scene in a full-screen transparent LayerShellQt surface on the overlay
+Shown by `vdw-ui`. QML scene in a full-screen transparent LayerShellQt surface on the overlay
 layer, all four anchors, exclusive zone -1, keyboard interactivity none (the
 active window keeps focus), Kirigami theme colors. Created on demand (about
 65 ms to first frame in the nested session; keep it alive only if it feels
