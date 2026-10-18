@@ -2,11 +2,11 @@
 
 Steps for the user, on the real Plasma session, with the `vdw` package
 installed and the legacy `setup-workspace.sh` shortcut removed (see "Migrating"
-in `README.md`). They open real windows: do them on an empty virtual desktop
+in `README.md`). They open real windows: do them on an empty desktop
 unless a step says otherwise. These merge the user steps of `spikes/S1.md`,
 `spikes/S2.md` and `spikes/T3b.md`; the nested session could not show them.
 
-## 0. Setup
+## 0. Preparation
 
 1. Log out and in, or run `vdwctl list` (D-Bus activation starts vdwd with
    the session environment; do not run `vdwd` from a terminal, its apps would

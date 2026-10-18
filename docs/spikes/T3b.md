@@ -39,7 +39,7 @@ never on the live session.
   theirs. On startup `Shortcuts::sync` lists the actions of component
   `vdw` and unregisters every `open-<id>` whose id is not in the config
   (`KGlobalAccel.unregister`; never `main`). Checked in the nested session.
-- **Names with "&"**: KGlobalAccel drops every "&" of the action text when it
+- **Names with "&"**: KGlobalAccel removes every "&" of the action text when it
   registers, so "R&D" showed as "RD" on a fresh start. The visible name is now
   also sent with `doRegister` after the first registration, the same call a
   rename uses, so both paths give "R&D".
@@ -92,7 +92,7 @@ vdwd registers Ctrl+Meta+D, which the legacy `net.local.setup-workspace.sh.deskt
 binding also uses. Remove that binding first (System Settings, Shortcuts,
 find the "setup-workspace" entry, clear its shortcut) or run vdwd with a
 different key (step 3). The checks below open real windows on the current
-virtual desktop: use an empty one.
+desktop: use an empty one.
 
 1. Build: `cmake --preset dev && cmake --build --preset dev`.
 2. Write a small test config, for example `/tmp/vdw-t3b.rc`:
@@ -130,7 +130,7 @@ virtual desktop: use an empty one.
    Plasma OSD, with the folder icon). Tap D again while still holding
    Ctrl+Meta within 2 s: a second Konsole opens. Repeat, but let go of
    Ctrl and Meta before the second tap: nothing opens.
-6. Hold Ctrl+Meta+D for more than 250 ms: a ring menu with Alpha and Beta
+6. Hold Ctrl+Meta+D for more than 250 ms: a radial menu with Alpha and Beta
    appears around the pointer. Move onto a slice and release D (or any of
    the keys): that workspace opens. Release over the center: nothing opens.
    Check that the menu follows the pointer position at the time of the

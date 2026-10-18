@@ -59,14 +59,15 @@ script can start it.
 - **Gesture state machine (S1):** pure logic, no Qt GUI, injectable clock,
   unit-tested. Inputs: press, release, modifiersHeld(bool), timer, menu
   selection, emptiness result. Outputs: open workspace, show menu, hide menu,
-  show OSD. Rules are in `SPEC.md`; in short:
+  show toast. Rules are in `SPEC.md`; in short:
   - idle: press starts the hold timer (250 ms).
   - pressed: release before the timer is a tap; timer firing opens the menu.
   - menu: release selects (dead zone = cancel).
   - awaiting confirm (2 s timer): a new press of the same shortcut confirms.
-    In the tap path, modifiers going up also cancels immediately; in the menu
-    path only the timeout cancels (the user has usually let go of every key
-    when picking).
+    After the main shortcut (a tap or a menu pick), releasing Ctrl or Meta
+    also cancels immediately; if the modifiers are already up when the
+    desktop turns out to be busy, the open ends without a toast. After a
+    workspace shortcut, only the timeout cancels.
   - Must tolerate release without press, press without release, and stale
     timers (generation counters).
 - **Launching (S4, S5):** done by `vdw-ui` with `KIO::ApplicationLauncherJob`

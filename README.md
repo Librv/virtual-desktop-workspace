@@ -1,14 +1,14 @@
 # Virtual Desktop Workspace
 
-Open a saved set of apps at saved positions on the current virtual desktop, with
+Open a saved set of apps at saved positions on the current desktop, with
 a global shortcut or a radial menu. For KDE Plasma 6 on Wayland (single monitor).
 
 ## What it does
 
-A workspace is a named layout: a list of apps (by `.desktop` id, with optional
-arguments) and a position and size for each, stored as fractions of the screen
-area not covered by panels. The background daemon `vdwd` opens a workspace on the
-current virtual desktop; nothing else is moved or closed.
+A workspace is a named, saved set of apps: a list of apps (by `.desktop` id,
+with optional arguments) and a position and size for each, stored as fractions
+of the screen area not covered by panels. The background daemon `vdwd` opens a
+workspace on the current desktop; nothing else is moved or closed.
 
 - **Tap Ctrl+Meta+D:** open the default workspace.
 - **Hold Ctrl+Meta+D:** show the radial menu around the pointer. Move toward a

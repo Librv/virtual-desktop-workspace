@@ -91,7 +91,7 @@ rewrites `.clang-format` on configure while it still carries ECM's "do not
 edit" header; the committed file is identical to what it writes, so this is a
 no-op. Remove the header line if the style ever needs local changes.
 
-## How the nested session is set up
+## How the nested session works
 
 `scripts/dev-session.sh start`:
 
@@ -123,8 +123,8 @@ no-op. Remove the header line if the style ever needs local changes.
   reaches `kwin.log`.
 
 Unverified assumptions to check on the first real run: that the virtual
-backend renders without a GPU in this setup; that Xwayland can create its
-socket (it needs `/tmp/.X11-unix`, which outside the sandbox is fine); the
+backend renders without a GPU in this configuration; that Xwayland can create
+its socket (it needs `/tmp/.X11-unix`, which outside the sandbox is fine); the
 exact prefix KWin puts on `print()` lines (the script prints all new lines,
 filtered of `js: ` / `kwin_scripting: ` prefixes, so any format works).
 

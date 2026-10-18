@@ -1,7 +1,7 @@
 # Virtual Desktop Workspace
 
 KDE Plasma 6 (Wayland) tool that opens saved sets of apps at saved positions on
-the current virtual desktop, via global shortcuts and a radial menu.
+the current desktop, via global shortcuts and a radial menu.
 
 ## Read first
 

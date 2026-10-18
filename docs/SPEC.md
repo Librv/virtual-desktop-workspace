@@ -6,7 +6,7 @@ What the app does, from the user's point of view. Implementation lives in
 ## Goal
 
 Set up a predefined set of apps, placed at predefined positions, on the current
-virtual desktop with one keyboard shortcut. It should feel like part of KDE
+desktop with one keyboard shortcut. It should feel like part of KDE
 Plasma: shortcuts editable in System Settings, Plasma-styled popups, a System
 Settings page for configuration.
 
@@ -15,7 +15,8 @@ for now).
 
 ## Workspaces
 
-A **workspace** is a named, saved layout, for example "3 Konsoles":
+A **workspace** is a named, saved set of apps with their positions, for
+example "3 Konsoles":
 
 - a name and an optional icon
 - the System Settings page shows a pager-style preview of the placement: a
@@ -26,7 +27,7 @@ A **workspace** is a named, saved layout, for example "3 Konsoles":
   - the app (its `.desktop` file id, e.g. `org.kde.konsole`)
   - optional extra command-line arguments
   - a position and size, stored as fractions of the screen area not covered by
-    panels (so layouts survive resolution and panel changes)
+    panels (so positions survive resolution and panel changes)
 
 One workspace is marked as the **default**.
 
@@ -40,7 +41,7 @@ Workspaces can be created two ways:
 
 ## Opening a workspace
 
-A workspace always opens on the **currently active** virtual desktop. No new
+A workspace always opens on the **currently active** desktop. No new
 desktops are created.
 
 - **Empty desktop:** the apps launch and are placed immediately.
@@ -52,8 +53,10 @@ desktops are created.
   the toast; so does the 2 second timeout (configurable). If the modifiers
   are already up when the desktop turns out to be busy, the request is
   cancelled without a toast.
-- This applies to every way of opening a workspace: the main shortcut, a
-  per-workspace shortcut, and the radial menu.
+- The toast and the confirm apply to every way of opening a workspace: the
+  main shortcut, a per-workspace shortcut, and the radial menu. After a
+  per-workspace shortcut, a new press of that shortcut confirms, and only the
+  timeout cancels.
 - On confirm, existing windows are left untouched; new windows go into their
   slots even if they overlap existing ones.
 - Where a workspace's own windows overlap, the order of its apps decides:
@@ -72,8 +75,8 @@ desktops are created.
 If no default workspace is set (or it was deleted), a tap shows a short
 toast instead (it hides after 3 seconds); holding still opens the menu.
 
-Per-workspace shortcuts only support tap (and the same confirm flow); they
-never open the menu.
+Per-workspace shortcuts only support tap (with the confirm flow above, where
+only the timeout cancels); they never open the menu.
 
 ## Radial menu
 
@@ -94,6 +97,6 @@ Shown while the main shortcut is held.
 ## Out of scope for now
 
 - Multiple monitors
-- Restoring app state (open files, tabs, terminal directories)
+- Restoring app state (open files, tabs, terminal folders)
 - Moving or closing windows that were already on the desktop
 - Activities
