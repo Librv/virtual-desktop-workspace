@@ -1,8 +1,7 @@
 # Tasks
 
 One file per task. An agent picks a task whose dependencies are all `done`,
-sets it to `in-progress` here, and works in its own git worktree when other
-tasks run at the same time. Spikes write their findings to `docs/spikes/<id>.md`
+sets it to `in-progress` here, and works in its own git worktree. Spikes write their findings to `docs/spikes/<id>.md`
 and may change `ARCHITECTURE.md`; settled choices go into `DECISIONS.md`.
 
 Status values: `todo`, `in-progress`, `blocked`, `done`.

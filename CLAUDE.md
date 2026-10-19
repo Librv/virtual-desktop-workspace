@@ -14,7 +14,8 @@ the current desktop, via global shortcuts and a radial menu.
 
 1. Pick a task in `docs/tasks/README.md` whose dependencies are `done`; set it
    to `in-progress`.
-2. When other tasks run in parallel, work in your own git worktree.
+2. A task that needs planning runs in its own git worktree (`worktree` skill).
+   The main checkout stays on `main`.
 3. Spikes: put throwaway code in `spikes/<id>/` and findings in
    `docs/spikes/<id>.md`. Update `ARCHITECTURE.md` if the findings change the
    design.
@@ -33,8 +34,10 @@ bounded work:
   design decisions: if the docs are ambiguous or wrong, they stop and report.
   Never run two implementers on overlapping files; parallel implementers each
   get their own git worktree.
-- `reviewer`: run on every finished task before it is marked done. The
-  coordinator commits after the review findings are handled.
+- `researcher`: web research (docs, articles, public repos).
+- `reviewer`: run on every finished task before it is marked done, and for
+  hands-on checks in the nested KWin session. The coordinator commits after
+  the review findings are handled.
 - Design questions go to the coordinator, and from there to the user when
   they change behavior.
 
@@ -85,5 +88,7 @@ bus: that is the live session.
 
 Several agents can run nested sessions at once: give each its own state dir,
 e.g. `VDW_DEV_DIR=/run/user/1000/vdw-<task> scripts/dev-session.sh start`.
+Each worktree has its own `build/dev`, so the first `scripts/build.sh test` in
+a new worktree configures and builds from zero.
 Fake key/pointer input and screenshots work in the nested session (see
 `docs/ARCHITECTURE.md`, Testing).
