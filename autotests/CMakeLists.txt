@@ -64,6 +64,7 @@ target_compile_definitions(integrationtest PRIVATE
     S1INJECT_PATH="${CMAKE_SOURCE_DIR}/spikes/S1/build/s1inject"
     S2FAKEINPUT_PATH="${CMAKE_SOURCE_DIR}/spikes/S2/build/s2-fakeinput"
     STARTUPHELPER_PATH="$<TARGET_FILE:startupwindowhelper>"
+    VDW_NOTIFYRC_PATH="${CMAKE_SOURCE_DIR}/src/daemon/vdw.notifyrc"
     FAKEBROWSER_PATH="$<TARGET_FILE:fakebrowser>"
 )
 add_dependencies(integrationtest vdwd vdw-ui vdwctl startupwindowhelper fakebrowser)

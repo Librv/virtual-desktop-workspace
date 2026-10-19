@@ -89,9 +89,10 @@ desktops are created.
   to the log only.
 - If the saved browser profile does not exist, or vdwd cannot read the
   profile list of the browser, the browser opens its last-used profile.
-  vdwd then writes a warning to its log. vdwd never tells the browser to use a
-  profile that does not exist, because the browser then makes a new empty
-  profile.
+  vdwd then writes a warning to its log and sends a notification that names
+  the app and the profile (one for each slot). vdwd never tells the browser
+  to use a profile that does not exist, because the browser then makes a new
+  empty profile.
 - The profile of a slot has priority over a `--profile-directory` option in
   its arguments. Capture does not save a profile.
 

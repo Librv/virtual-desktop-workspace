@@ -18,6 +18,7 @@ depends=(
     'ki18n'
     'kio'
     'kirigami'
+    'knotifications'
     'kservice'
     'kwin'
     'layer-shell-qt'

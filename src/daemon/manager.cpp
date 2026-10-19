@@ -11,6 +11,7 @@
 #include "layout.h"
 
 #include <KConfig>
+#include <KNotification>
 #include <KService>
 #include <KSharedConfig>
 
@@ -234,6 +235,9 @@ void Manager::startChainSlot(const std::shared_ptr<OpenRun> &run, int chain, int
     const ProfileLaunch launch = slotLaunch(slot, run->localStates);
     if (!launch.warning.isEmpty()) {
         qCWarning(VDW_DAEMON) << slot.app << "profile" << slot.profile << "not used:" << launch.warning;
+        const KService::Ptr service = KService::serviceByDesktopName(slot.app);
+        const ProfileNotice notice = profileNotice(service ? service->name() : slot.app, slot.profile, launch.issue);
+        KNotification::event(QStringLiteral("profileNotUsed"), notice.title, notice.text, QStringLiteral("dialog-warning"));
     }
     m_launcher->launch(slot.app, launch.args, [this, run, launchId, last, settleChain](bool ok, qint64 pid, const QString &error) {
         if (ok) {

@@ -74,6 +74,52 @@ public Q_SLOTS:
 public:
     QStringList reports;
 };
+
+// Stands in for the notification server: records the calls of Notify.
+class FakeNotifications : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "org.freedesktop.Notifications")
+public Q_SLOTS:
+    QStringList GetCapabilities()
+    {
+        return {QStringLiteral("body")};
+    }
+
+    QString GetServerInformation(QString &vendor, QString &version, QString &specVersion)
+    {
+        vendor = QStringLiteral("vdw test");
+        version = QStringLiteral("1");
+        specVersion = QStringLiteral("1.2");
+        return QStringLiteral("fake");
+    }
+
+    uint Notify(const QString &appName,
+                uint replacesId,
+                const QString &icon,
+                const QString &summary,
+                const QString &body,
+                const QStringList &actions,
+                const QVariantMap &hints,
+                int timeout)
+    {
+        Q_UNUSED(replacesId)
+        Q_UNUSED(icon)
+        Q_UNUSED(actions)
+        Q_UNUSED(hints)
+        Q_UNUSED(timeout)
+        notes.append({appName, summary, body});
+        return uint(notes.size());
+    }
+
+public:
+    struct Note {
+        QString appName;
+        QString summary;
+        QString body;
+    };
+    QList<Note> notes;
+};
 }
 
 Q_DECLARE_METATYPE(KeySequence)
@@ -1176,6 +1222,98 @@ private Q_SLOTS:
         });
         QVERIFY(konsole != snap.windows.cend());
         QVERIFY(near(konsole->rect, Vdw::Layout::slotRect(snap.area, QRectF(0.5, 0, 0.5, 0.5))));
+    }
+
+    // A browser slot with a profile that is not in Local State opens the
+    // last-used profile, and vdwd sends one notification for the slot.
+    void testMissingProfileNotifies()
+    {
+        QVERIFY(closeAll());
+        auto *iface = QDBusConnection::sessionBus().interface();
+        const auto restoreDaemon = qScopeGuard([this, iface] {
+            m_daemon->terminate();
+            m_daemon->waitForFinished(5000);
+            for (int i = 0; i < 50 && iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")); ++i) {
+                QTest::qWait(100);
+            }
+            m_daemon = std::make_unique<QProcess>();
+            m_daemon->setProcessChannelMode(QProcess::ForwardedChannels);
+            m_daemon->start(QStringLiteral(VDWD_PATH), {QStringLiteral("--config"), m_dir.filePath(QStringLiteral("vdwrc")), QStringLiteral("--debug")});
+            m_daemon->waitForStarted();
+            for (int i = 0; i < 150 && !iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")); ++i) {
+                QTest::qWait(100);
+            }
+        });
+        m_daemon->terminate();
+        QVERIFY(m_daemon->waitForFinished(5000));
+        QTRY_VERIFY_WITH_TIMEOUT(!iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")), 5000);
+
+        FakeNotifications server;
+        auto bus = QDBusConnection::sessionBus();
+        QVERIFY2(bus.registerService(QStringLiteral("org.freedesktop.Notifications")), "another notification server runs on the nested bus");
+        const auto unregisterServer = qScopeGuard([&bus] {
+            bus.unregisterObject(QStringLiteral("/org/freedesktop/Notifications"));
+            bus.unregisterService(QStringLiteral("org.freedesktop.Notifications"));
+        });
+        QVERIFY(bus.registerObject(QStringLiteral("/org/freedesktop/Notifications"), &server, QDBusConnection::ExportAllSlots));
+
+        QTemporaryDir configHome;
+        QVERIFY(configHome.isValid());
+        QVERIFY(QDir().mkpath(configHome.filePath(QStringLiteral("net.imput.helium"))));
+        QFile state(configHome.filePath(QStringLiteral("net.imput.helium/Local State")));
+        QVERIFY(state.open(QIODevice::WriteOnly));
+        state.write(R"({"profile": {"info_cache": {"Default": {"name": "One"}}}})");
+        state.close();
+
+        const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+        QVERIFY(dataDir.contains(QLatin1String("/vdw")));
+        QVERIFY(QDir().mkpath(dataDir + QStringLiteral("/applications")));
+        QVERIFY(QDir().mkpath(dataDir + QStringLiteral("/knotifications6")));
+        const QString desktopPath = dataDir + QStringLiteral("/applications/helium.desktop");
+        QFile desktop(desktopPath);
+        QVERIFY(desktop.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        desktop.write(QStringLiteral("[Desktop Entry]\nType=Application\nName=Helium\nExec=%1 --socket %2 %U\n")
+                          .arg(QStringLiteral(FAKEBROWSER_PATH), configHome.filePath(QStringLiteral("sock")))
+                          .toUtf8());
+        desktop.close();
+        const QString notifyrcPath = dataDir + QStringLiteral("/knotifications6/vdw.notifyrc");
+        QFile::remove(notifyrcPath);
+        QVERIFY(QFile::copy(QStringLiteral(VDW_NOTIFYRC_PATH), notifyrcPath));
+        const auto removeFiles = qScopeGuard([&desktopPath, &notifyrcPath] {
+            QFile::remove(desktopPath);
+            QFile::remove(notifyrcPath);
+        });
+
+        QFile cfg(m_dir.filePath(QStringLiteral("vdwrc-notify")));
+        QVERIFY(cfg.open(QIODevice::WriteOnly));
+        cfg.write(
+            "[General]\nDefaultWorkspace=web\n\n"
+            "[Workspace][web]\nName=Web\nOrder=0\n\n"
+            "[Workspace][web][Slot][0]\nApp=helium\nProfile=Gone\nGeometry=0,0,1,1\n");
+        cfg.close();
+
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("XDG_CONFIG_HOME"), configHome.path());
+        m_daemon = std::make_unique<QProcess>();
+        m_daemon->setProcessChannelMode(QProcess::ForwardedChannels);
+        m_daemon->setProcessEnvironment(env);
+        m_daemon->start(QStringLiteral(VDWD_PATH), {QStringLiteral("--config"), cfg.fileName(), QStringLiteral("--debug")});
+        QVERIFY(m_daemon->waitForStarted());
+        QTRY_VERIFY_WITH_TIMEOUT(iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")), 15000);
+        const auto closeWindows = qScopeGuard([this] {
+            closeAll();
+        });
+
+        QCOMPARE(ctl({QStringLiteral("open"), QStringLiteral("web")}).out, QStringLiteral("opened"));
+        QTRY_COMPARE_WITH_TIMEOUT(server.notes.size(), 1, 10000);
+        QCOMPARE(server.notes.first().summary, QStringLiteral("Helium opened the last-used profile"));
+        QCOMPARE(server.notes.first().body, QStringLiteral("There is no profile with the name \"Gone\"."));
+        // Helium opened its last-used profile (no --profile-directory).
+        QTRY_VERIFY_WITH_TIMEOUT(snapshot().windows.size() == 1, 20000);
+        QCOMPARE(snapshot().windows.first().title, QStringLiteral("Default"));
+        // One notification for the slot, not more.
+        QTest::qWait(500);
+        QCOMPARE(server.notes.size(), 1);
     }
 
     // Runs last: replaces the daemon with one that has no vdwrc (in its own

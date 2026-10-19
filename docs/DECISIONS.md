@@ -49,6 +49,8 @@ rewrite old entries, add a new one that supersedes them.
 | 40 | 2026-10-19 | vdwd merges the profile into `Args` before it sends the launch to `vdw-ui`. The launch message stays `{app, args}` | `vdw-ui`, `UiClient` and `Launcher` do not change, and the merge logic stays in `src/lib` where unit tests cover it |
 | 41 | 2026-10-19 | Supersedes 39. When a workspace has two or more slots of the same browser, all these slots launch one at a time, with or without a profile. All other slots launch in parallel | A slot with a profile and a slot with the last-used profile can also swap, and so can two slots with different Args |
 | 42 | 2026-10-19 | The reply to an open goes out after vdwd starts each slot that is not in a browser queue. Queued slots start later, and their launch failures go to the log only. vdwd stays busy until the queue is empty | Each queued slot can wait up to the placement timeout (10 s), and `vdwctl` stops after 10 s |
+| 43 | 2026-10-19 | M3 notification: vdwd sends a notification for a missing profile and for an unreadable profile list, one for each slot. The text names the app (display name) and the name of the profile folder | In both cases the browser opens the wrong profile. A missing profile has no display name |
+| 44 | 2026-10-19 | vdwd links KF6 Notifications, which pulls in libQt6Gui. vdwd still starts no `QGuiApplication`. This changes 32 only for this library | Idle vdwd goes from 18 MB to 23 MB RSS (1.6 MB to 2.9 MB private), far below the 49 MB of a Qt GUI process. The notification shows in System Settings. User approved it |
 
 ## Open
 

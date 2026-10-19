@@ -47,12 +47,30 @@ QList<BrowserProfile> readLocalState(const QString &userDataDir, QString *error)
 /// Returns nullopt when `args` cannot be split.
 std::optional<QString> withProfileArgs(const QString &args, const QString &profileDir);
 
+/// Why a saved profile cannot be used.
+enum class ProfileIssue {
+    None,
+    Missing, ///< the profile is not in "Local State"
+    Unreadable, ///< "Local State" cannot be read
+};
+
 /// The args to launch a browser slot with. `warning` is not empty when the
 /// profile could not be used and the browser will open its last-used profile.
 struct ProfileLaunch {
     QString args;
     QString warning;
+    ProfileIssue issue = ProfileIssue::None; ///< why `warning` is set
 };
+
+/// The text of the notification vdwd sends for a profile that was not used.
+struct ProfileNotice {
+    QString title;
+    QString text;
+};
+
+/// The notification for `issue` of a browser slot. `appName` is the display
+/// name of the app. Both texts are empty for `ProfileIssue::None`.
+ProfileNotice profileNotice(const QString &appName, const QString &profile, ProfileIssue issue);
 
 /// Decides the launch args for a slot of a known browser with `profile` set.
 /// `profiles` and `readError` are the result of `readLocalState` (`readError`

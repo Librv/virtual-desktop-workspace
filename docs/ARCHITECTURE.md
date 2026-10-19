@@ -34,9 +34,11 @@ C++ / Qt 6 / KDE Frameworks 6, started at login via XDG autostart (or a
 systemd user unit), plus a D-Bus `.service` file so a `callDBus` from the KWin
 script can start it.
 
-- **No Qt GUI (S5):** vdwd is a `QCoreApplication` and links only Qt
-  Core/DBus and KF6 ConfigCore, CoreAddons and Service (KF6 GlobalAccel,
-  DBusAddons, GuiAddons and KIOGui all pull in libQt6Gui). Everything that
+- **No Qt GUI app (S5):** vdwd is a `QCoreApplication` and links Qt
+  Core/DBus and KF6 ConfigCore, CoreAddons, Service and Notifications. KF6
+  Notifications pulls in libQt6Gui (DECISIONS 44), but vdwd starts no
+  `QGuiApplication`, so idle vdwd uses about 23 MB RSS. vdwd does not use
+  KF6 GlobalAccel, DBusAddons, GuiAddons or KIOGui. Everything that
   needs a GUI or Wayland runs in `vdw-ui` (below). It registers its D-Bus
   name with plain `registerService` and exits if the name is taken.
 - **Shortcuts (S1, S5):** one component `vdw` in kglobalaccel, one action per

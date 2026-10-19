@@ -129,22 +129,39 @@ std::optional<QString> withProfileArgs(const QString &args, const QString &profi
 ProfileLaunch profileLaunch(const QString &args, const QString &profile, const QList<BrowserProfile> &profiles, const QString &readError)
 {
     QString warning;
+    ProfileIssue issue = ProfileIssue::None;
     QString dir = profile;
     if (!readError.isEmpty()) {
+        issue = ProfileIssue::Unreadable;
         warning = QStringLiteral("cannot read the browser profiles: ") + readError;
         dir.clear();
     } else if (std::none_of(profiles.cbegin(), profiles.cend(), [&profile](const BrowserProfile &p) {
                    return p.dir == profile;
                })) {
+        issue = ProfileIssue::Missing;
         warning = QStringLiteral("the profile does not exist");
         dir.clear();
     }
     const std::optional<QString> result = withProfileArgs(args, dir);
     if (!result) {
         // vdw-ui reports the parse error for the unchanged args.
-        return {args, warning};
+        return {args, warning, issue};
     }
-    return {*result, warning};
+    return {*result, warning, issue};
+}
+
+ProfileNotice profileNotice(const QString &appName, const QString &profile, ProfileIssue issue)
+{
+    switch (issue) {
+    case ProfileIssue::Missing:
+        return {QStringLiteral("%1 opened the last-used profile").arg(appName), QStringLiteral("There is no profile with the name \"%1\".").arg(profile)};
+    case ProfileIssue::Unreadable:
+        return {QStringLiteral("%1 opened the last-used profile").arg(appName),
+                QStringLiteral("vdw cannot read the list of %1 profiles. %1 did not open the profile \"%2\".").arg(appName, profile)};
+    case ProfileIssue::None:
+        break;
+    }
+    return {};
 }
 
 ProfileLaunch slotLaunch(const Slot &slot, LocalStateCache &cache)

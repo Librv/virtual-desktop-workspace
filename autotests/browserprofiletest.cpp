@@ -234,6 +234,50 @@ private Q_SLOTS:
         }
     }
 
+    void profileNotice_data()
+    {
+        QTest::addColumn<QString>("appName");
+        QTest::addColumn<QString>("profile");
+        QTest::addColumn<QString>("readError");
+        QTest::addColumn<int>("issue");
+        QTest::addColumn<QString>("title");
+        QTest::addColumn<QString>("text");
+        const int none = int(ProfileIssue::None);
+        const int missing = int(ProfileIssue::Missing);
+        const int unreadable = int(ProfileIssue::Unreadable);
+        QTest::newRow("listed") << "Helium" << "Default" << QString() << none << QString() << QString();
+        QTest::newRow("missing") << "Helium" << "Profile 9" << QString() << missing << "Helium opened the last-used profile"
+                                 << "There is no profile with the name \"Profile 9\".";
+        QTest::newRow("unreadable") << "Helium" << "Default" << "no such file" << unreadable << "Helium opened the last-used profile"
+                                    << "vdw cannot read the list of Helium profiles. Helium did not open the profile \"Default\".";
+        QTest::newRow("unicode") << QString::fromUtf8("Brave Büro") << QString::fromUtf8("Profil Ä 日本") << QString() << missing
+                                 << QString::fromUtf8("Brave Büro opened the last-used profile")
+                                 << QString::fromUtf8("There is no profile with the name \"Profil Ä 日本\".");
+        QTest::newRow("unicode, unreadable") << QString::fromUtf8("Brave Büro") << QString::fromUtf8("Profil Ä 日本") << "denied" << unreadable
+                                             << QString::fromUtf8("Brave Büro opened the last-used profile")
+                                             << QString::fromUtf8(
+                                                    "vdw cannot read the list of Brave Büro profiles. Brave Büro did not open the profile \"Profil Ä 日本\".");
+        QTest::newRow("placeholder text in names") << "100%1 App" << "%2" << QString() << missing << "100%1 App opened the last-used profile"
+                                                   << "There is no profile with the name \"%2\".";
+    }
+
+    void profileNotice()
+    {
+        QFETCH(QString, appName);
+        QFETCH(QString, profile);
+        QFETCH(QString, readError);
+        QFETCH(int, issue);
+        QFETCH(QString, title);
+        QFETCH(QString, text);
+        const QList<BrowserProfile> profiles{{QStringLiteral("Default"), QStringLiteral("Default")}};
+        const ProfileLaunch launch = Vdw::profileLaunch(QString(), profile, profiles, readError);
+        QCOMPARE(int(launch.issue), issue);
+        QCOMPARE(launch.warning.isEmpty(), issue == int(ProfileIssue::None));
+        const ProfileNotice notice = Vdw::profileNotice(appName, profile, launch.issue);
+        QCOMPARE(notice.title, title);
+        QCOMPARE(notice.text, text);
+    }
+
     void slotLaunchUsesConfigDir()
     {
         const QString dir = userDataDir(*findBrowser(QStringLiteral("helium")));
