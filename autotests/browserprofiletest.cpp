@@ -183,6 +183,29 @@ private Q_SLOTS:
         QCOMPARE(split, expected);
     }
 
+    void hasProfileOption_data()
+    {
+        QTest::addColumn<QString>("args");
+        QTest::addColumn<bool>("expected");
+        QTest::newRow("empty") << "" << false;
+        QTest::newRow("other args") << "--incognito --x=1" << false;
+        QTest::newRow("= form") << "--profile-directory=Default" << true;
+        QTest::newRow("two tokens") << "--incognito --profile-directory Default" << true;
+        QTest::newRow("no value") << "--profile-directory" << true;
+        QTest::newRow("quoted") << "'--profile-directory=Profile 1'" << true;
+        QTest::newRow("unsplittable") << "--profile-directory=Default 'unclosed" << false;
+        QTest::newRow("similar option") << "--profile-directoryx" << false;
+        QTest::newRow("similar option with =") << "--profile-directoryx=Default" << false;
+        QTest::newRow("only a value") << "foo --profile-director" << false;
+    }
+
+    void hasProfileOption()
+    {
+        QFETCH(QString, args);
+        QFETCH(bool, expected);
+        QCOMPARE(Vdw::hasProfileOption(args), expected);
+    }
+
     // The path vdw-ui takes: split the args again, then quote them for an Exec line.
     void profileArgsExecLine()
     {

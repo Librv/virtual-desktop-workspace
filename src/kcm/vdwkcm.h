@@ -51,6 +51,11 @@ public:
 
     /// {found, name, icon} of an app id, for the slot rows.
     Q_INVOKABLE QVariantMap appInfo(const QString &desktopId) const;
+    /// {isBrowser, choices, error} for the profile picker of a slot. `choices` is
+    /// a list of {dir, name, missing}; `profile` is the saved profile of the slot.
+    Q_INVOKABLE QVariantMap browserProfiles(const QString &app, const QString &profile) const;
+    /// Whether `args` has a --profile-directory option.
+    Q_INVOKABLE bool hasProfileOption(const QString &args) const;
     /// Ask the daemon to save the windows of the current desktop as a new workspace.
     Q_INVOKABLE void captureCurrentDesktop(const QString &name);
     /// Open the Shortcuts page of System Settings.

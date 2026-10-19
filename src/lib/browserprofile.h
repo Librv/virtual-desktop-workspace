@@ -47,6 +47,10 @@ QList<BrowserProfile> readLocalState(const QString &userDataDir, QString *error)
 /// Returns nullopt when `args` cannot be split.
 std::optional<QString> withProfileArgs(const QString &args, const QString &profileDir);
 
+/// True when `args` has a `--profile-directory` option (with `=` or as a
+/// separate value). False when `args` cannot be split.
+bool hasProfileOption(const QString &args);
+
 /// Why a saved profile cannot be used.
 enum class ProfileIssue {
     None,

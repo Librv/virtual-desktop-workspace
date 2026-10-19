@@ -3,14 +3,28 @@
 
 #pragma once
 
+#include "browserprofile.h"
 #include "workspace.h"
 
 #include <QAbstractListModel>
 #include <QList>
 #include <QSet>
+#include <QString>
 
 namespace Vdw
 {
+
+/// One entry of the profile picker of a browser slot.
+struct ProfileChoice {
+    QString dir; ///< profile directory name, what vdwrc stores
+    QString name; ///< display name
+    bool missing = false; ///< `dir` is saved in the slot but the browser has no such profile
+};
+
+/// The picker entries for `profiles`, sorted by display name (numbers in names
+/// compare as numbers, ties by dir). When `saved` is not empty and not in
+/// `profiles`, one entry for it is added at the end with `missing` set.
+QList<ProfileChoice> profileChoices(const QList<BrowserProfile> &profiles, const QString &saved);
 
 /// The editable list of workspaces behind the KCM. Pure data editing: no
 /// file access, no D-Bus. Slot editing goes through SlotModel.
@@ -100,6 +114,7 @@ public:
     enum Role {
         AppRole = Qt::UserRole + 1,
         ArgsRole,
+        ProfileRole,
         XRole,
         YRole,
         WidthRole,

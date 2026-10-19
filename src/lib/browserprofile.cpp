@@ -29,6 +29,12 @@ void setError(QString *error, const QString &message)
 
 const QString profileOption = QStringLiteral("--profile-directory");
 
+/// True for the `--profile-directory=<dir>` form of the option.
+bool isProfileOptionWithValue(const QString &arg)
+{
+    return arg.startsWith(profileOption + QLatin1Char('='));
+}
+
 } // namespace
 
 const Browser *findBrowser(const QString &desktopId)
@@ -116,7 +122,7 @@ std::optional<QString> withProfileArgs(const QString &args, const QString &profi
             if (i + 1 < split.size() && !split.at(i + 1).startsWith(QLatin1Char('-'))) {
                 ++i;
             }
-        } else if (!arg.startsWith(profileOption + QLatin1Char('='))) {
+        } else if (!isProfileOptionWithValue(arg)) {
             kept.append(arg);
         }
     }
@@ -124,6 +130,18 @@ std::optional<QString> withProfileArgs(const QString &args, const QString &profi
         kept.append(profileOption + QLatin1Char('=') + profileDir);
     }
     return KShell::joinArgs(kept);
+}
+
+bool hasProfileOption(const QString &args)
+{
+    KShell::Errors status = KShell::NoError;
+    const QStringList split = KShell::splitArgs(args, KShell::AbortOnMeta | KShell::TildeExpand, &status);
+    if (status != KShell::NoError) {
+        return false;
+    }
+    return std::any_of(split.cbegin(), split.cend(), [](const QString &arg) {
+        return arg == profileOption || isProfileOptionWithValue(arg);
+    });
 }
 
 ProfileLaunch profileLaunch(const QString &args, const QString &profile, const QList<BrowserProfile> &profiles, const QString &readError)
