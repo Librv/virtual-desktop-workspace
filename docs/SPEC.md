@@ -69,6 +69,13 @@ desktops are created.
   before or after it, the main window takes the slot. This applies in the first
   5 minutes after the app got its slot. If both windows stay open, the second
   window gets no slot.
+- A window that has a fixed size is never moved or resized. The startup
+  windows of Discord and Steam have a fixed size, so they stay where the app
+  puts them. The main window of the app takes the slot. An app whose only
+  window has a fixed size is not placed.
+- While a fixed-size window of a launch is open, the launch counts as busy
+  for up to 5 minutes after the launch. The desktop then asks for
+  confirmation, as with other busy desktops.
 
 ## The main shortcut: Ctrl+Meta+D
 

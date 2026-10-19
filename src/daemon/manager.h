@@ -11,6 +11,7 @@
 #include <QObject>
 #include <QRect>
 #include <QString>
+#include <QTimer>
 
 #include <functional>
 
@@ -69,12 +70,16 @@ private:
     QString saveCapture(const QString &name, const QRect &area, const QJsonArray &windows, qint64 callerPid);
     void launchSlots(const Workspace &workspace, const QRect &area, const Reply &reply);
     void expirePending();
+    /// Restart the expiry timer at the matcher's next deadline. Held launches
+    /// move it, so call it after each change of the matcher.
+    void armExpiry();
 
     Config m_config;
     QString m_configPath;
     KWinScripts *m_scripts;
     Launcher *m_launcher;
     Matcher m_matcher;
+    QTimer m_expiryTimer;
     int m_nextLaunchId = 0;
     int m_nextOpenId = 0;
     bool m_opening = false; ///< a non-forced open is between its checks and its launches

@@ -18,6 +18,7 @@
 #include <QDBusPendingReply>
 #include <QDBusReply>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -432,7 +433,16 @@ private:
         if (!installStartupApp() || !closeAll()) {
             return false;
         }
-        return ctl({QStringLiteral("open"), QStringLiteral("startup")}).out == QStringLiteral("opened");
+        // A launch held by an earlier failed test stays busy until its
+        // timeout: wait it out, so one failure does not fail the next test.
+        QString out;
+        const bool done = QTest::qWaitFor(
+            [&] {
+                out = ctl({QStringLiteral("open"), QStringLiteral("startup")}).out;
+                return out != QStringLiteral("busy");
+            },
+            10000);
+        return done && out == QStringLiteral("opened");
     }
 
     QRect startupSlotRect()
@@ -449,6 +459,39 @@ private:
             }
         }
         return std::nullopt;
+    }
+
+    // Polls until the main window is the only window and sits on the slot (up
+    // to 15 s). True if the startup window was seen and never moved or resized
+    // meanwhile: its rect stays the one of its first sight, which is smaller
+    // than and not at the slot.
+    bool mainAtSlotStartupUntouched()
+    {
+        std::optional<QRect> first;
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 15000) {
+            const Snapshot snap = snapshot();
+            const QRect slot = Vdw::Layout::slotRect(snap.area, QRectF(0, 0, 0.5, 1));
+            for (const Window &w : snap.windows) {
+                if (w.title != QLatin1String("vdw-startup")) {
+                    continue;
+                }
+                if (!first) {
+                    first = w.rect;
+                    if (near(w.rect, slot) || w.rect.height() >= slot.height()) {
+                        return false;
+                    }
+                } else if (w.rect != *first) {
+                    return false;
+                }
+            }
+            if (first && mainWindowAtSlot()) {
+                return true;
+            }
+            QTest::qWait(20);
+        }
+        return false;
     }
 
     // True if the main window is the only window and sits on the slot.
@@ -487,7 +530,7 @@ private Q_SLOTS:
         QFile cfg(m_dir.filePath(QStringLiteral("vdwrc")));
         QVERIFY(cfg.open(QIODevice::WriteOnly));
         cfg.write(
-            "[General]\nDefaultWorkspace=two\n\n"
+            "[General]\nDefaultWorkspace=two\nPlacementTimeoutMs=5000\n\n"
             "[Workspace][two]\nName=Two\nOrder=1\n\n"
             "[Workspace][two][Slot][0]\nApp=org.kde.konsole\nGeometry=0,0,0.5,1\n\n"
             "[Workspace][two][Slot][1]\nApp=org.kde.konsole\nGeometry=0.5,0,0.5,0.5\n\n"
@@ -640,33 +683,58 @@ private Q_SLOTS:
         QVERIFY(closeAll());
     }
 
-    // Discord-like: the main window opens, the startup window closes 100 ms
-    // later. The main window takes over the slot.
+    // Discord-like: the main window opens, the startup window (fixed size)
+    // closes 100 ms later. The main window takes the slot, the startup window
+    // is never moved or resized.
     void testStartupWindowOverlapHandsOverSlot()
     {
         QVERIFY(startupWorkspaceOpened(QStringLiteral("overlap 100")));
-        QTRY_VERIFY_WITH_TIMEOUT(mainWindowAtSlot(), 15000);
+        QVERIFY(mainAtSlotStartupUntouched());
         QTest::qWait(1000);
         QVERIFY(mainWindowAtSlot());
         QVERIFY(closeAll());
     }
 
-    // Steam-like: the startup window closes, the main window opens 300 ms
-    // later. The main window takes over the slot.
+    // Steam-like: the startup window (fixed size) closes, the main window opens
+    // 300 ms later. The main window takes the slot, the startup window is
+    // never moved or resized.
     void testStartupWindowGapHandsOverSlot()
     {
         QVERIFY(startupWorkspaceOpened(QStringLiteral("gap 300")));
+        QVERIFY(mainAtSlotStartupUntouched());
+        QTest::qWait(1000);
+        QVERIFY(mainWindowAtSlot());
+        QVERIFY(closeAll());
+    }
+
+    // The fixed-size startup window stays open longer than the placement
+    // timeout of the test config (5 s). It holds the launch: the main window
+    // that opens 6.5 s after start still gets the slot.
+    void testStartupWindowHoldsLaunchPastTimeout()
+    {
+        QVERIFY(startupWorkspaceOpened(QStringLiteral("hold 6500")));
+        QVERIFY(mainAtSlotStartupUntouched());
+        QTest::qWait(1000);
+        QVERIFY(mainWindowAtSlot());
+        QVERIFY(closeAll());
+    }
+
+    // A resizable startup window is placed, and hands the slot over as before:
+    // the main window opens, the startup window closes 100 ms later.
+    void testResizableStartupWindowOverlapHandsOverSlot()
+    {
+        QVERIFY(startupWorkspaceOpened(QStringLiteral("overlap 100 resizable")));
         QTRY_VERIFY_WITH_TIMEOUT(mainWindowAtSlot(), 15000);
         QTest::qWait(1000);
         QVERIFY(mainWindowAtSlot());
         QVERIFY(closeAll());
     }
 
-    // Control: the main window opens 3 s after the startup window closed, too
-    // late for a hand-over. It gets no slot.
-    void testStartupWindowLongGapGivesNoHandover()
+    // Control: the main window opens 3 s after the resizable startup window
+    // closed, too late for a hand-over. It gets no slot.
+    void testResizableStartupWindowLongGapGivesNoHandover()
     {
-        QVERIFY(startupWorkspaceOpened(QStringLiteral("gap 3000")));
+        QVERIFY(startupWorkspaceOpened(QStringLiteral("gap 3000 resizable")));
         QTRY_VERIFY_WITH_TIMEOUT(startupMainWindow().has_value(), 15000);
         QTest::qWait(1000);
         const std::optional<QRect> main = startupMainWindow();

@@ -22,6 +22,8 @@
 #include <QJsonObject>
 #include <QLoggingCategory>
 #include <QTimer>
+#include <algorithm>
+#include <limits>
 
 #include <memory>
 
@@ -71,6 +73,8 @@ Manager::Manager(const QString &configPath, KWinScripts *scripts, Launcher *laun
     , m_launcher(launcher)
     , m_matcher(m_config.placementTimeoutMs())
 {
+    m_expiryTimer.setSingleShot(true);
+    connect(&m_expiryTimer, &QTimer::timeout, this, &Manager::expirePending);
     qCInfo(VDW_DAEMON) << "loaded" << m_config.workspaces().size() << "workspaces," << m_config.warnings().size() << "warnings";
 }
 
@@ -175,7 +179,7 @@ void Manager::launchSlots(const Workspace &workspace, const QRect &area, const R
         const int launchId = ++m_nextLaunchId;
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
         m_matcher.addPending({launchId, 0, slot.app, Layout::slotRect(area, slot.geometry), now, group, order++});
-        QTimer::singleShot(m_matcher.timeoutMs() + 100, this, &Manager::expirePending);
+        armExpiry();
 
         m_launcher->launch(slot.app, slot.args, [this, state, launchId, total, reply](bool ok, qint64 pid, const QString &error) {
             if (ok) {
@@ -183,6 +187,7 @@ void Manager::launchSlots(const Workspace &workspace, const QRect &area, const R
             } else {
                 qCWarning(VDW_DAEMON) << "launch failed:" << error;
                 m_matcher.remove(launchId);
+                armExpiry();
                 if (state->failed++ == 0) {
                     state->firstError = error;
                 }
@@ -205,6 +210,18 @@ void Manager::expirePending()
     for (const PendingLaunch &launch : expired) {
         qCInfo(VDW_DAEMON) << "no window for" << launch.appId << "pid" << launch.pid << "(expired)";
     }
+    armExpiry();
+}
+
+void Manager::armExpiry()
+{
+    const std::optional<qint64> deadline = m_matcher.nextDeadlineMs();
+    if (!deadline) {
+        m_expiryTimer.stop();
+        return;
+    }
+    const qint64 delayMs = std::max<qint64>(0, *deadline - QDateTime::currentMSecsSinceEpoch());
+    m_expiryTimer.start(static_cast<int>(std::min<qint64>(delayMs + 100, std::numeric_limits<int>::max())));
 }
 
 // The reply of ClaimWindow, and of ReleaseWindow when `windowId` is not empty.
@@ -230,8 +247,15 @@ QString Manager::claimWindow(const QString &windowJson)
     window.resourceClass = object.value(QLatin1String("resourceClass")).toString();
     window.internalId = object.value(QLatin1String("id")).toString();
     window.timeMs = QDateTime::currentMSecsSinceEpoch();
+    window.resizeable = object.value(QLatin1String("resizeable")).toBool(true);
 
-    const std::optional<PendingLaunch> launch = m_matcher.claim(window);
+    std::optional<PendingLaunch> newlyHeld;
+    const std::optional<PendingLaunch> launch = m_matcher.claim(window, &newlyHeld);
+    armExpiry();
+    if (newlyHeld) {
+        qCInfo(VDW_DAEMON) << "fixed-size window" << window.desktopFileName << "pid" << window.pid << "holds launch" << newlyHeld->launchId
+                           << "for its main window";
+    }
     if (!launch) {
         qCInfo(VDW_DAEMON) << "window" << window.desktopFileName << "pid" << window.pid << "matches no launch";
         return QString();
@@ -245,6 +269,7 @@ QString Manager::releaseWindow(const QString &windowJson)
     const QJsonObject object = QJsonDocument::fromJson(windowJson.toUtf8()).object();
     const QString id = object.value(QLatin1String("id")).toString();
     const std::optional<Handover> handover = m_matcher.release(id, QDateTime::currentMSecsSinceEpoch());
+    armExpiry();
     if (!handover) {
         return QString();
     }
@@ -351,6 +376,7 @@ void Manager::ReloadConfig()
 {
     m_config = loadConfig(m_configPath);
     m_matcher.setTimeoutMs(m_config.placementTimeoutMs());
+    armExpiry();
     qCInfo(VDW_DAEMON) << "reloaded:" << m_config.workspaces().size() << "workspaces," << m_config.warnings().size() << "warnings";
     Q_EMIT configReloaded();
 }

@@ -54,6 +54,7 @@ workspace.windowAdded.connect(function(w) {
         pid: w.pid,
         desktopFileName: w.desktopFileName,
         resourceClass: w.resourceClass,
+        resizeable: w.resizeable,
     };
     callDBus(SERVICE, PATH, IFACE, "ClaimWindow", JSON.stringify(info), function(reply) {
         if (!reply || w.deleted) {

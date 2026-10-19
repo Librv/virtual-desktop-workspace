@@ -155,7 +155,7 @@ numbers arrive as int32, so integer parameters are `i`).
   script can get the id of another live one (T2). `start()` runs every
   loaded script that is not running yet. The placer is reloaded when
   `org.kde.KWin` reappears on the bus. On `workspace.windowAdded` it calls `ClaimWindow` with the window's
-  pid, `desktopFileName`, `resourceClass` and `internalId`. If a match comes
+  pid, `desktopFileName`, `resourceClass`, `internalId` and `resizeable`. If a match comes
   back (`{rect, group, order}`: the rect, one id per open, the slot index) it
   sets `frameGeometry` (it sticks; no re-apply needed), then raises the live
   windows of that group in slot order with `workspace.raiseWindow`, so the
@@ -207,8 +207,31 @@ still gets the slot. A launch whose window closed waits for a hand-over:
 - If both windows stay open, there is no hand-over.
 - Ordinary pending launches match before launches that wait for a hand-over.
 
-No window property tells a startup window apart from a real window, so the
-rule uses no resizability or caption test.
+Fixed-size windows: a window that is not resizeable (`resizeable` is false)
+is never placed, on any path. All measured startup windows are fixed-size: the
+Discord updater, the Steam update window and the Steam "Sign in to Steam"
+loading window (700x440). All measured main windows are new, resizable
+windows. The rules for a fixed-size window:
+
+- A fixed-size window never consumes a launch. If it matches a launch (the
+  rules above, also a launch that waits for a hand-over), it holds the
+  launch.
+- A held launch does not expire while the window is open, up to
+  `HandoverWatchMs` (5 min) after the launch time.
+- When the holder closes, the launch waits `HandoverGapMs` (1 s) more for the
+  main window. It never ends earlier than its normal timeout.
+- Several fixed-size windows in a row, or open together, hold the same
+  launch.
+- A held launch is still pending: a non-forced `OpenWorkspace` replies
+  `busy`.
+- The daemon keeps one expiry timer. It arms the timer at
+  `Matcher::nextDeadlineMs()` after each change.
+
+Resizable startup windows hand over as described above. Costs that the user
+accepted: an app whose only window is fixed-size is never placed, and while
+such a window is open its launch counts as busy for up to 5 min.
+
+The rules use no caption test.
 
 Windows that match nothing are left alone. Activation tokens are not visible
 to KWin scripts, so they are not used. Captions are not stable; never match

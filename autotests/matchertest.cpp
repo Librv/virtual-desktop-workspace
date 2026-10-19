@@ -26,6 +26,11 @@ ObservedWindow windowWithId(const QString &id, qint64 pid, const QString &app, q
     return {pid, app, QString(), id, timeMs};
 }
 
+ObservedWindow fixedWindow(const QString &id, qint64 pid, const QString &app, qint64 timeMs)
+{
+    return {pid, app, QString(), id, timeMs, false};
+}
+
 QString handoverId(Matcher &m, const QString &closedId, qint64 nowMs)
 {
     const auto h = m.release(closedId, nowMs);
@@ -452,6 +457,193 @@ private Q_SLOTS:
         // A window hands over once: a second close of it is unknown.
         QVERIFY(!m.release(QStringLiteral("a"), 200));
         QVERIFY(!m.release(QStringLiteral("a"), 300));
+    }
+
+    // Discord: the fixed-size updater is never placed, the resizable main window is.
+    void testFixedSizeWindowNeverClaims()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Discord, 0));
+        QCOMPARE(claimedId(m, fixedWindow(QStringLiteral("updater"), 100, Discord, 100)), -1);
+        QCOMPARE(m.pendingCount(), 1);
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Discord, 2000)), 0);
+        QCOMPARE(m.pendingCount(), 0);
+        QVERIFY(!m.release(QStringLiteral("updater"), 2100));
+    }
+
+    void testFixedSizeWindowMatchingNothingIsLeftAlone()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Konsole, 0));
+        QCOMPARE(claimedId(m, fixedWindow(QStringLiteral("x"), 5, Dolphin, 100)), -1);
+        QVERIFY(m.nextDeadlineMs());
+        QCOMPARE(*m.nextDeadlineMs(), qint64(Timeout));
+    }
+
+    // Steam: two fixed-size windows in a row, then the main one.
+    void testTwoFixedSizeWindowsThenMain()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        QCOMPARE(claimedId(m, fixedWindow(QStringLiteral("update"), 100, Steam, 100)), -1);
+        QVERIFY(!m.release(QStringLiteral("update"), 3000));
+        QCOMPARE(claimedId(m, fixedWindow(QStringLiteral("loading"), 100, Steam, 3500)), -1);
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Steam, 5700)), 0);
+        // The loading window closing after the claim changes nothing.
+        QVERIFY(!m.release(QStringLiteral("loading"), 6200));
+        QCOMPARE(m.pendingCount(), 0);
+    }
+
+    void testHoldOutlivesTimeout()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, fixedWindow(QStringLiteral("update"), 100, Steam, 100));
+        QVERIFY(m.expire(60000).isEmpty());
+        QCOMPARE(m.pendingCount(), 1);
+        QCOMPARE(*m.nextDeadlineMs(), Matcher::HandoverWatchMs);
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Steam, 120000)), 0);
+    }
+
+    void testHoldPastWatchTimeExpires()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, fixedWindow(QStringLiteral("update"), 100, Steam, 100));
+        QVERIFY(m.expire(Matcher::HandoverWatchMs).isEmpty());
+        const auto expired = m.expire(Matcher::HandoverWatchMs + 1);
+        QCOMPARE(expired.size(), 1);
+        QCOMPARE(expired.first().launchId, 0);
+        QCOMPARE(m.pendingCount(), 0);
+        QVERIFY(!m.nextDeadlineMs());
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Steam, Matcher::HandoverWatchMs + 2)), -1);
+    }
+
+    void testHolderClosesThenMainWithinGapClaims()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, fixedWindow(QStringLiteral("update"), 100, Steam, 100));
+        QVERIFY(!m.release(QStringLiteral("update"), 30000));
+        QVERIFY(m.expire(30000 + Matcher::HandoverGapMs).isEmpty());
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Steam, 30000 + Matcher::HandoverGapMs)), 0);
+    }
+
+    void testHolderClosesThenMainAfterGapDoesNotClaim()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, fixedWindow(QStringLiteral("update"), 100, Steam, 100));
+        QVERIFY(!m.release(QStringLiteral("update"), 30000));
+        const auto expired = m.expire(30000 + Matcher::HandoverGapMs + 1);
+        QCOMPARE(expired.size(), 1);
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Steam, 40000)), -1);
+    }
+
+    // The grace after a close never ends the launch before its normal timeout.
+    void testHolderClosesEarlyKeepsNormalTimeout()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Discord, 0));
+        claimedId(m, fixedWindow(QStringLiteral("updater"), 100, Discord, 100));
+        QVERIFY(!m.release(QStringLiteral("updater"), 500));
+        QCOMPARE(*m.nextDeadlineMs(), qint64(Timeout));
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Discord, 9000)), 0);
+    }
+
+    void testSecondHolderRestartsHold()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, fixedWindow(QStringLiteral("a"), 100, Steam, 100));
+        m.release(QStringLiteral("a"), 30000);
+        claimedId(m, fixedWindow(QStringLiteral("b"), 100, Steam, 30500));
+        QVERIFY(m.expire(50000).isEmpty());
+        m.release(QStringLiteral("b"), 50000);
+        QVERIFY(m.expire(50000 + Matcher::HandoverGapMs).isEmpty());
+        QCOMPARE(m.expire(50000 + Matcher::HandoverGapMs + 1).size(), 1);
+    }
+
+    void testNewlyHeldReportedOnce()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        std::optional<PendingLaunch> held;
+        m.claim(fixedWindow(QStringLiteral("a"), 100, Steam, 100), &held);
+        QVERIFY(held);
+        QCOMPARE(held->launchId, 0);
+        held.reset();
+        m.claim(fixedWindow(QStringLiteral("b"), 100, Steam, 200), &held);
+        QVERIFY(!held);
+    }
+
+    // A later holder after the first one closed holds the launch again.
+    void testNewlyHeldReportedAgainAfterHolderClosed()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, fixedWindow(QStringLiteral("a"), 100, Steam, 100));
+        m.release(QStringLiteral("a"), 300);
+        std::optional<PendingLaunch> held;
+        m.claim(fixedWindow(QStringLiteral("b"), 100, Steam, 500), &held);
+        QVERIFY(held);
+        QCOMPARE(held->launchId, 0);
+    }
+
+    // Two holders open at once: the launch stays held until both closed.
+    void testOverlappingHoldersHoldUntilLastCloses()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, fixedWindow(QStringLiteral("a"), 100, Steam, 100));
+        claimedId(m, fixedWindow(QStringLiteral("b"), 100, Steam, 200));
+        m.release(QStringLiteral("a"), 20000);
+        QVERIFY(m.expire(40000).isEmpty());
+        QCOMPARE(m.pendingCount(), 1);
+        m.release(QStringLiteral("b"), 40000);
+        QVERIFY(m.expire(40000 + Matcher::HandoverGapMs).isEmpty());
+        QCOMPARE(m.expire(40000 + Matcher::HandoverGapMs + 1).size(), 1);
+    }
+
+    void testFixedSizeWindowHoldsRearmedLaunch()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Steam, 0));
+        QVERIFY(!m.release(QStringLiteral("a"), 1000));
+        QCOMPARE(claimedId(m, fixedWindow(QStringLiteral("loading"), 100, Steam, 1500)), -1);
+        // Held beyond the usual HandoverGapMs.
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Steam, 60000)), 0);
+    }
+
+    void testFixedSizeWindowNeverGetsHandover()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Steam, 0));
+        QCOMPARE(claimedId(m, fixedWindow(QStringLiteral("fixed"), 100, Steam, 1500)), -1);
+        QVERIFY(!m.release(QStringLiteral("a"), 2000));
+        QVERIFY(!m.release(QStringLiteral("fixed"), 2100));
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Steam, 2200)), 0);
+    }
+
+    void testFixedSizeWindowAfterRearmedExpiryIsIgnored()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Steam, 0));
+        m.release(QStringLiteral("a"), 1000);
+        QCOMPARE(claimedId(m, fixedWindow(QStringLiteral("late"), 100, Steam, 5000)), -1);
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Steam, 5100)), -1);
+    }
+
+    void testRemoveDropsHold()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, fixedWindow(QStringLiteral("a"), 100, Steam, 100));
+        QVERIFY(m.remove(0));
+        QVERIFY(!m.nextDeadlineMs());
     }
 
     void testRearmedExpiresSilently()

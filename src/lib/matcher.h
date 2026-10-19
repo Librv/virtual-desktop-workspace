@@ -3,9 +3,11 @@
 
 #pragma once
 
+#include <QHash>
 #include <QList>
 #include <QRect>
 #include <QString>
+#include <QStringList>
 
 #include <optional>
 
@@ -30,6 +32,7 @@ struct ObservedWindow {
     QString resourceClass;
     QString internalId;
     qint64 timeMs = 0;
+    bool resizeable = true; ///< fixed-size windows are startup windows: never placed
 };
 
 /// A window that takes over the slot of a closed window.
@@ -58,6 +61,14 @@ struct Handover {
 ///    replacement can be replaced again, but the time still counts from the
 ///    first placement. Windows that stay open get no hand-over. Ordinary
 ///    pending launches match before launches that wait for a hand-over.
+/// 5. A window that is not resizeable is a startup window (Discord updater,
+///    Steam loading window): it is never placed, on any path, and it does not
+///    consume a launch. If it matches a launch (same rules as 1 and 2, also a
+///    launch that waits for a hand-over) it holds that launch: the launch does
+///    not expire while the window is open, up to HandoverWatchMs after the
+///    launch time. When the window closes (`release`), the launch waits
+///    HandoverGapMs more for the main window, but never ends earlier than its
+///    normal timeout. Several fixed-size windows in a row each hold the launch.
 class Matcher
 {
 public:
@@ -79,8 +90,10 @@ public:
     bool remove(int launchId);
 
     /// Match a window and consume the launch. Launches that expired before
-    /// `window.timeMs` are dropped first.
-    std::optional<PendingLaunch> claim(const ObservedWindow &window);
+    /// `window.timeMs` are dropped first. A fixed-size window never consumes a
+    /// launch: it holds a matching one and returns nothing; `newlyHeld` is set
+    /// to the launch when this window starts holding it (for logging).
+    std::optional<PendingLaunch> claim(const ObservedWindow &window, std::optional<PendingLaunch> *newlyHeld = nullptr);
 
     /// A window passed to `claim` closed at `nowMs`; call it for every such
     /// window, so a closed one never takes a slot. For a placed window:
@@ -94,11 +107,17 @@ public:
     /// `nowMs`. Also drops stale hand-over state, silently.
     QList<PendingLaunch> expire(qint64 nowMs);
 
-    /// Launches that wait for their first window (not hand-over state).
+    /// Launches that wait for their first window (not hand-over state). A
+    /// held launch counts.
     int pendingCount() const
     {
         return m_pending.size();
     }
+
+    /// The time after which `expire` returns the next pending launch (it
+    /// expires once `nowMs` is greater than this), or nothing without pending
+    /// launches. Held launches move it, so call it again after each change.
+    std::optional<qint64> nextDeadlineMs() const;
 
 private:
     /// A launch whose window is open.
@@ -116,12 +135,26 @@ private:
         qint64 deadlineMs = 0;
     };
 
+    /// Fixed-size windows that hold a launch.
+    struct Hold {
+        QStringList openWindowIds;
+        qint64 graceEndMs = 0; ///< last close + HandoverGapMs
+    };
+
     void prune(qint64 nowMs);
+    /// Drop the holds of launches that are no longer pending or re-armed.
+    void purgeHolds();
+    /// When a launch ends: `baseMs` or, if held, later.
+    qint64 deadlineWithHold(const PendingLaunch &launch, qint64 baseMs) const;
+    qint64 pendingDeadline(const PendingLaunch &launch) const;
+    /// The launch a window belongs to, pending first, else re-armed. Null if none.
+    const PendingLaunch *findLaunch(const ObservedWindow &window) const;
 
     int m_timeoutMs;
     QList<PendingLaunch> m_pending; ///< in launch order (oldest first)
     QList<Placed> m_placed;
     QList<Rearmed> m_rearmed; ///< oldest first
+    QHash<int, Hold> m_holds; ///< by launch id, for pending and re-armed launches
     QList<ObservedWindow> m_unmatched; ///< windows that matched nothing, oldest first
 };
 

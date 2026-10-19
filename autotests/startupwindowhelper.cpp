@@ -6,11 +6,16 @@
 //
 //   startupwindowhelper <app id> <settings file>
 //
-// The settings file holds one line, "<mode> <ms>", and the helper reads it at
-// start, so the test can change the behaviour without a new .desktop file:
+// The settings file holds one line, "<mode> <ms> [resizable]", and the helper
+// reads it at start, so the test can change the behaviour without a new
+// .desktop file:
 //   overlap <ms>  the main window opens, the startup window closes <ms> later
 //   gap <ms>      the startup window closes, the main window opens <ms> later
-// The first step runs 300 ms after start. Titles: "vdw-startup", "vdw-main".
+//   hold <ms>     the main window opens <ms> after start, the startup window
+//                 closes 100 ms later
+// The first step of overlap and gap runs 300 ms after start. The startup
+// window has a fixed size (KWin then reports resizeable == false) unless the
+// line ends with "resizable". Titles: "vdw-startup", "vdw-main".
 
 #include <QFile>
 #include <QGuiApplication>
@@ -23,11 +28,15 @@ namespace
 {
 constexpr int firstStepMs = 300;
 
-std::unique_ptr<QRasterWindow> makeWindow(const QString &title)
+std::unique_ptr<QRasterWindow> makeWindow(const QString &title, bool fixedSize = false)
 {
     auto window = std::make_unique<QRasterWindow>();
     window->setTitle(title);
     window->resize(400, 300);
+    if (fixedSize) {
+        window->setMinimumSize(window->size());
+        window->setMaximumSize(window->size());
+    }
     window->show();
     return window;
 }
@@ -48,15 +57,17 @@ int main(int argc, char *argv[])
         return 2;
     }
     const QList<QByteArray> words = file.readLine().simplified().split(' ');
-    if (words.size() != 2) {
+    if (words.size() != 2 && words.size() != 3) {
         return 2;
     }
-    const bool overlap = words.at(0) == "overlap";
-    const int ms = words.at(1).toInt();
+    const bool overlap = words.at(0) == "overlap" || words.at(0) == "hold";
+    const int ms = words.at(0) == "hold" ? 100 : words.at(1).toInt();
+    const int stepMs = words.at(0) == "hold" ? words.at(1).toInt() : firstStepMs;
+    const bool fixedSize = words.size() == 2;
 
-    std::unique_ptr<QRasterWindow> startup = makeWindow(QStringLiteral("vdw-startup"));
+    std::unique_ptr<QRasterWindow> startup = makeWindow(QStringLiteral("vdw-startup"), fixedSize);
     std::unique_ptr<QRasterWindow> main;
-    QTimer::singleShot(firstStepMs, &app, [&] {
+    QTimer::singleShot(stepMs, &app, [&] {
         if (overlap) {
             main = makeWindow(QStringLiteral("vdw-main"));
             QTimer::singleShot(ms, &app, [&] {
