@@ -47,6 +47,11 @@ public:
     /// to a pending launch, else "".
     QString claimWindow(const QString &windowJson);
 
+    /// ScriptApi::ReleaseWindow, for `{id}` of a closed window that was sent
+    /// to claimWindow. `{id, rect, group, order}` of the window that takes the
+    /// slot of the closed one (hand-over), else "".
+    QString releaseWindow(const QString &windowJson);
+
 public Q_SLOTS:
     QString ListWorkspaces();
     QString OpenWorkspace(const QString &id, bool force);
@@ -86,6 +91,7 @@ public:
 
 public Q_SLOTS:
     QString ClaimWindow(const QString &windowJson);
+    QString ReleaseWindow(const QString &windowJson);
     void QueryResult(const QString &requestId, const QString &json);
     void CursorPos(int x, int y);
 

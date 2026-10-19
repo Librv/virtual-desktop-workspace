@@ -31,6 +31,7 @@
 #include <unistd.h>
 
 #include <memory>
+#include <optional>
 
 namespace
 {
@@ -122,6 +123,7 @@ private:
     struct Window {
         QString cls;
         QRect rect;
+        QString title;
     };
     struct Snapshot {
         QRect area;
@@ -138,7 +140,8 @@ private:
             "const ws = workspace.windowList().filter(function(w) { return w.normalWindow && w.minimizable; })\n"
             "  .sort(function(a, b) { return st.indexOf(a) - st.indexOf(b); }).map(function(w) {\n"
             "  const g = w.frameGeometry;\n"
-            "  return {cls: w.resourceClass, x: Math.round(g.x), y: Math.round(g.y), width: Math.round(g.width), height: Math.round(g.height)};\n"
+            "  return {cls: w.resourceClass, x: Math.round(g.x), y: Math.round(g.y), width: Math.round(g.width), height: Math.round(g.height), title: "
+            "w.caption};\n"
             "});\n"
             "callDBus('org.kde.vdw.T2test', '/T2', 'org.kde.vdw.T2test', 'Report',\n"
             "  JSON.stringify({area: {x: a.x, y: a.y, width: a.width, height: a.height}, windows: ws}));\n");
@@ -159,11 +162,10 @@ private:
             QRect(a[QStringLiteral("x")].toInt(), a[QStringLiteral("y")].toInt(), a[QStringLiteral("width")].toInt(), a[QStringLiteral("height")].toInt());
         for (const QJsonValue &v : o[QStringLiteral("windows")].toArray()) {
             const QJsonObject w = v.toObject();
-            snap.windows.append({w[QStringLiteral("cls")].toString(),
-                                 QRect(w[QStringLiteral("x")].toInt(),
-                                       w[QStringLiteral("y")].toInt(),
-                                       w[QStringLiteral("width")].toInt(),
-                                       w[QStringLiteral("height")].toInt())});
+            snap.windows.append(
+                {w[QStringLiteral("cls")].toString(),
+                 QRect(w[QStringLiteral("x")].toInt(), w[QStringLiteral("y")].toInt(), w[QStringLiteral("width")].toInt(), w[QStringLiteral("height")].toInt()),
+                 w[QStringLiteral("title")].toString()});
         }
         return snap;
     }
@@ -390,6 +392,73 @@ private:
         return true;
     }
 
+    // Writes the .desktop file of the startup-window app into the nested
+    // XDG_DATA_HOME only and refreshes the service cache.
+    bool installStartupApp()
+    {
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+        if (!dir.contains(QLatin1String("/vdw"))) {
+            return false;
+        }
+        QDir().mkpath(dir + QStringLiteral("/applications"));
+        QFile file(dir + QStringLiteral("/applications/vdw-startup-test.desktop"));
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            return false;
+        }
+        file.write(QStringLiteral("[Desktop Entry]\nType=Application\nName=Startup test\nExec=%1 vdw-startup-test %2\nNoDisplay=true\n")
+                       .arg(QStringLiteral(STARTUPHELPER_PATH), startupSettingsPath())
+                       .toUtf8());
+        file.close();
+        QProcess sycoca;
+        sycoca.start(QStringLiteral("kbuildsycoca6"), {});
+        return sycoca.waitForFinished(15000);
+    }
+
+    QString startupSettingsPath() const
+    {
+        return m_dir.filePath(QStringLiteral("startup-settings"));
+    }
+
+    // Opens the "startup" workspace on an empty desktop; `settings` is the
+    // line startupwindowhelper reads.
+    bool startupWorkspaceOpened(const QString &settings)
+    {
+        QFile file(startupSettingsPath());
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            return false;
+        }
+        file.write(settings.toUtf8() + '\n');
+        file.close();
+        if (!installStartupApp() || !closeAll()) {
+            return false;
+        }
+        return ctl({QStringLiteral("open"), QStringLiteral("startup")}).out == QStringLiteral("opened");
+    }
+
+    QRect startupSlotRect()
+    {
+        return Vdw::Layout::slotRect(snapshot().area, QRectF(0, 0, 0.5, 1));
+    }
+
+    // Rect of the "vdw-main" window of startupwindowhelper, if it is up.
+    std::optional<QRect> startupMainWindow()
+    {
+        for (const Window &w : snapshot().windows) {
+            if (w.title == QLatin1String("vdw-main")) {
+                return w.rect;
+            }
+        }
+        return std::nullopt;
+    }
+
+    // True if the main window is the only window and sits on the slot.
+    bool mainWindowAtSlot()
+    {
+        const Snapshot snap = snapshot();
+        return snap.windows.size() == 1 && snap.windows.first().title == QLatin1String("vdw-main")
+            && near(snap.windows.first().rect, Vdw::Layout::slotRect(snap.area, QRectF(0, 0, 0.5, 1)));
+    }
+
     QTemporaryDir m_dir;
     Receiver m_receiver;
     std::unique_ptr<QProcess> m_daemon;
@@ -428,7 +497,9 @@ private Q_SLOTS:
             "[Workspace][stack]\nName=Stack\nOrder=2\n\n"
             "[Workspace][stack][Slot][0]\nApp=org.kde.konsole\nGeometry=0,0,0.6,0.6\n\n"
             "[Workspace][stack][Slot][1]\nApp=org.kde.konsole\nGeometry=0.2,0.2,0.6,0.6\n\n"
-            "[Workspace][stack][Slot][2]\nApp=org.kde.konsole\nGeometry=0.4,0.4,0.6,0.6\n");
+            "[Workspace][stack][Slot][2]\nApp=org.kde.konsole\nGeometry=0.4,0.4,0.6,0.6\n\n"
+            "[Workspace][startup]\nName=Startup\nOrder=3\n\n"
+            "[Workspace][startup][Slot][0]\nApp=vdw-startup-test\nGeometry=0,0,0.5,1\n");
         cfg.close();
 
         auto bus = QDBusConnection::sessionBus();
@@ -465,7 +536,7 @@ private Q_SLOTS:
         const Result r = ctl({QStringLiteral("list")});
         QCOMPARE(r.exitCode, 0);
         const QJsonArray array = QJsonDocument::fromJson(r.out.toUtf8()).array();
-        QCOMPARE(array.size(), 3);
+        QCOMPARE(array.size(), 4);
         QCOMPARE(array[0].toObject()[QStringLiteral("id")].toString(), QStringLiteral("one"));
         QCOMPARE(array[1].toObject()[QStringLiteral("id")].toString(), QStringLiteral("two"));
         QVERIFY(array[1].toObject()[QStringLiteral("isDefault")].toBool());
@@ -566,6 +637,41 @@ private Q_SLOTS:
             const QRect want = Vdw::Layout::slotRect(snap.area, QRectF(0.2 * i, 0.2 * i, 0.6, 0.6));
             QVERIFY2(near(snap.windows[i].rect, want), qPrintable(QStringLiteral("stack position %1 is at x=%2").arg(i).arg(snap.windows[i].rect.x())));
         }
+        QVERIFY(closeAll());
+    }
+
+    // Discord-like: the main window opens, the startup window closes 100 ms
+    // later. The main window takes over the slot.
+    void testStartupWindowOverlapHandsOverSlot()
+    {
+        QVERIFY(startupWorkspaceOpened(QStringLiteral("overlap 100")));
+        QTRY_VERIFY_WITH_TIMEOUT(mainWindowAtSlot(), 15000);
+        QTest::qWait(1000);
+        QVERIFY(mainWindowAtSlot());
+        QVERIFY(closeAll());
+    }
+
+    // Steam-like: the startup window closes, the main window opens 300 ms
+    // later. The main window takes over the slot.
+    void testStartupWindowGapHandsOverSlot()
+    {
+        QVERIFY(startupWorkspaceOpened(QStringLiteral("gap 300")));
+        QTRY_VERIFY_WITH_TIMEOUT(mainWindowAtSlot(), 15000);
+        QTest::qWait(1000);
+        QVERIFY(mainWindowAtSlot());
+        QVERIFY(closeAll());
+    }
+
+    // Control: the main window opens 3 s after the startup window closed, too
+    // late for a hand-over. It gets no slot.
+    void testStartupWindowLongGapGivesNoHandover()
+    {
+        QVERIFY(startupWorkspaceOpened(QStringLiteral("gap 3000")));
+        QTRY_VERIFY_WITH_TIMEOUT(startupMainWindow().has_value(), 15000);
+        QTest::qWait(1000);
+        const std::optional<QRect> main = startupMainWindow();
+        QVERIFY(main.has_value());
+        QVERIFY(!near(*main, startupSlotRect()));
         QVERIFY(closeAll());
     }
 
@@ -848,7 +954,7 @@ private Q_SLOTS:
         // The new workspace is in the list, after the others, with the icon of
         // the first slot's app and three slots.
         const QJsonArray list = QJsonDocument::fromJson(ctl({QStringLiteral("list")}).out.toUtf8()).array();
-        QCOMPARE(list.size(), 4);
+        QCOMPARE(list.size(), 5);
         const QJsonObject added = list.last().toObject();
         QCOMPARE(added[QStringLiteral("id")].toString(), QStringLiteral("captured"));
         QCOMPARE(added[QStringLiteral("name")].toString(), QStringLiteral("Captured"));

@@ -63,6 +63,12 @@ desktops are created.
   the last app in the list is on top, the first at the bottom. The settings
   page can move apps up and down the list. Capture saves windows in this
   order (bottom first).
+- Some apps show a startup window first (the Discord updater, the Steam
+  loading window). The first window of an app gets the slot. If that window
+  closes and the main window of the app opens within 1 second of the close,
+  before or after it, the main window takes the slot. This applies in the first
+  5 minutes after the app got its slot. If both windows stay open, the second
+  window gets no slot.
 
 ## The main shortcut: Ctrl+Meta+D
 

@@ -19,12 +19,38 @@ function isAppWindow(w) {
 // the windows of one open in slot order (last slot on top).
 let claimed = [];
 
+// internalIds of the windows sent to ClaimWindow that are still open. Only
+// their closes go to ReleaseWindow.
+let reported = new Set();
+
+// Set the rect the daemon named and raise the windows of the claim's group
+// from the lowest slot up, so the last slot ends on top. Other windows and the
+// focus are left alone.
+function applyClaim(w, claim) {
+    // Setting frameGeometry sticks (spike S3).
+    w.frameGeometry = {x: claim.rect.x, y: claim.rect.y, width: claim.rect.width, height: claim.rect.height};
+    claimed = claimed.filter(function(c) {
+        return !c.w.deleted && c.w !== w;
+    });
+    claimed.push({w: w, group: claim.group, order: claim.order});
+    // Windows arrive in any order.
+    claimed.filter(function(c) {
+        return c.group === claim.group;
+    }).sort(function(a, b) {
+        return a.order - b.order;
+    }).forEach(function(c) {
+        workspace.raiseWindow(c.w);
+    });
+}
+
 workspace.windowAdded.connect(function(w) {
     if (!isAppWindow(w)) {
         return;
     }
+    const id = w.internalId.toString();
+    reported.add(id);
     const info = {
-        id: w.internalId.toString(),
+        id: id,
         pid: w.pid,
         desktopFileName: w.desktopFileName,
         resourceClass: w.resourceClass,
@@ -33,22 +59,32 @@ workspace.windowAdded.connect(function(w) {
         if (!reply || w.deleted) {
             return;
         }
-        const claim = JSON.parse(reply);
-        // Setting frameGeometry sticks (spike S3).
-        w.frameGeometry = {x: claim.rect.x, y: claim.rect.y, width: claim.rect.width, height: claim.rect.height};
-        claimed = claimed.filter(function(c) {
-            return !c.w.deleted;
+        applyClaim(w, JSON.parse(reply));
+    });
+});
+
+// The daemon needs every close, also of windows it did not place: a startup
+// window can close before it was claimed. A non-empty reply names the window
+// that takes the slot of the closed one.
+workspace.windowRemoved.connect(function(w) {
+    const id = w.internalId.toString();
+    if (!reported.delete(id)) {
+        return;
+    }
+    claimed = claimed.filter(function(c) {
+        return c.w !== w && !c.w.deleted;
+    });
+    callDBus(SERVICE, PATH, IFACE, "ReleaseWindow", JSON.stringify({id: id}), function(reply) {
+        if (!reply) {
+            return;
+        }
+        const handover = JSON.parse(reply);
+        const target = workspace.windowList().find(function(x) {
+            return x.internalId.toString() === handover.id;
         });
-        claimed.push({w: w, group: claim.group, order: claim.order});
-        // Windows arrive in any order: raise the group's windows from the
-        // lowest slot up, so the last slot ends on top. Other windows and the
-        // focus are left alone.
-        claimed.filter(function(c) {
-            return c.group === claim.group;
-        }).sort(function(a, b) {
-            return a.order - b.order;
-        }).forEach(function(c) {
-            workspace.raiseWindow(c.w);
-        });
+        if (!target || target.deleted) {
+            return;
+        }
+        applyClaim(target, handover);
     });
 });

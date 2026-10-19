@@ -207,6 +207,20 @@ void Manager::expirePending()
     }
 }
 
+// The reply of ClaimWindow, and of ReleaseWindow when `windowId` is not empty.
+static QString placementJson(const PendingLaunch &launch, const QString &windowId)
+{
+    const QJsonObject rect{{QStringLiteral("x"), launch.rect.x()},
+                           {QStringLiteral("y"), launch.rect.y()},
+                           {QStringLiteral("width"), launch.rect.width()},
+                           {QStringLiteral("height"), launch.rect.height()}};
+    QJsonObject reply{{QStringLiteral("rect"), rect}, {QStringLiteral("group"), launch.group}, {QStringLiteral("order"), launch.order}};
+    if (!windowId.isEmpty()) {
+        reply.insert(QStringLiteral("id"), windowId);
+    }
+    return QString::fromUtf8(QJsonDocument(reply).toJson(QJsonDocument::Compact));
+}
+
 QString Manager::claimWindow(const QString &windowJson)
 {
     const QJsonObject object = QJsonDocument::fromJson(windowJson.toUtf8()).object();
@@ -223,12 +237,20 @@ QString Manager::claimWindow(const QString &windowJson)
         return QString();
     }
     qCInfo(VDW_DAEMON) << "window" << window.desktopFileName << "pid" << window.pid << "claimed by launch" << launch->launchId << launch->rect;
-    const QJsonObject rect{{QStringLiteral("x"), launch->rect.x()},
-                           {QStringLiteral("y"), launch->rect.y()},
-                           {QStringLiteral("width"), launch->rect.width()},
-                           {QStringLiteral("height"), launch->rect.height()}};
-    const QJsonObject reply{{QStringLiteral("rect"), rect}, {QStringLiteral("group"), launch->group}, {QStringLiteral("order"), launch->order}};
-    return QString::fromUtf8(QJsonDocument(reply).toJson(QJsonDocument::Compact));
+    return placementJson(*launch, QString());
+}
+
+QString Manager::releaseWindow(const QString &windowJson)
+{
+    const QJsonObject object = QJsonDocument::fromJson(windowJson.toUtf8()).object();
+    const QString id = object.value(QLatin1String("id")).toString();
+    const std::optional<Handover> handover = m_matcher.release(id, QDateTime::currentMSecsSinceEpoch());
+    if (!handover) {
+        return QString();
+    }
+    qCInfo(VDW_DAEMON) << "window" << handover->windowId << "takes the slot of closed window" << id << "for launch" << handover->launch.launchId
+                       << handover->launch.rect;
+    return placementJson(handover->launch, handover->windowId);
 }
 
 QString Manager::CaptureCurrentDesktop(const QString &name)
@@ -343,6 +365,11 @@ ScriptApi::ScriptApi(Manager *manager, KWinScripts *scripts, QObject *parent)
 QString ScriptApi::ClaimWindow(const QString &windowJson)
 {
     return m_manager->claimWindow(windowJson);
+}
+
+QString ScriptApi::ReleaseWindow(const QString &windowJson)
+{
+    return m_manager->releaseWindow(windowJson);
 }
 
 void ScriptApi::QueryResult(const QString &requestId, const QString &json)

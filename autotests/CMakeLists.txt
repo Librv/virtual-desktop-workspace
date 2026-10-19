@@ -35,6 +35,10 @@ ecm_add_test(shortcutkeystest.cpp
     LINK_LIBRARIES Qt6::Core Qt6::Gui Qt6::Test vdwcore vdwmenu
 )
 
+# App of the hand-over integration tests: a startup window, then a main window.
+add_executable(startupwindowhelper startupwindowhelper.cpp)
+target_link_libraries(startupwindowhelper PRIVATE Qt6::Gui)
+
 # Skips unless run inside the nested session:
 #   scripts/dev-session.sh run -- ctest --preset dev -R integrationtest
 ecm_add_test(integrationtest.cpp
@@ -47,5 +51,6 @@ target_compile_definitions(integrationtest PRIVATE
     VDWCTL_PATH="$<TARGET_FILE:vdwctl>"
     S1INJECT_PATH="${CMAKE_SOURCE_DIR}/spikes/S1/build/s1inject"
     S2FAKEINPUT_PATH="${CMAKE_SOURCE_DIR}/spikes/S2/build/s2-fakeinput"
+    STARTUPHELPER_PATH="$<TARGET_FILE:startupwindowhelper>"
 )
-add_dependencies(integrationtest vdwd vdw-ui vdwctl)
+add_dependencies(integrationtest vdwd vdw-ui vdwctl startupwindowhelper)

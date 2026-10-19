@@ -21,6 +21,17 @@ ObservedWindow window(qint64 pid, const QString &app, qint64 timeMs = 100, const
     return {pid, app, resourceClass, QStringLiteral("{win-%1}").arg(pid), timeMs};
 }
 
+ObservedWindow windowWithId(const QString &id, qint64 pid, const QString &app, qint64 timeMs)
+{
+    return {pid, app, QString(), id, timeMs};
+}
+
+QString handoverId(Matcher &m, const QString &closedId, qint64 nowMs)
+{
+    const auto h = m.release(closedId, nowMs);
+    return h ? h->windowId : QString();
+}
+
 int claimedId(Matcher &m, const ObservedWindow &w)
 {
     const auto c = m.claim(w);
@@ -29,6 +40,8 @@ int claimedId(Matcher &m, const ObservedWindow &w)
 
 const QString Konsole = QStringLiteral("org.kde.konsole");
 const QString Dolphin = QStringLiteral("org.kde.dolphin");
+const QString Discord = QStringLiteral("discord");
+const QString Steam = QStringLiteral("steam");
 }
 
 class MatcherTest : public QObject
@@ -237,6 +250,218 @@ private Q_SLOTS:
         m.addPending(launch(1, 2, Konsole, 10));
         m.addPending(launch(0, 1, Konsole, 0));
         QCOMPARE(claimedId(m, window(999, Konsole, 20)), 0);
+    }
+
+    // Discord: the main window opens before the updater closes.
+    void testHandoverWindowOpenedBeforeClose()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Discord, 0));
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("updater"), 100, Discord, 500)), 0);
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Discord, 2500)), -1);
+        const auto h = m.release(QStringLiteral("updater"), 2600);
+        QVERIFY(h);
+        QCOMPARE(h->windowId, QStringLiteral("main"));
+        QCOMPARE(h->launch.launchId, 0);
+        QCOMPARE(h->launch.rect, QRect(0, 0, 100, 100));
+    }
+
+    // The window opened exactly HandoverGapMs before the close still counts.
+    void testHandoverGapBoundaryBeforeClose()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("b"), 100, Discord, 2000));
+        QCOMPARE(handoverId(m, QStringLiteral("a"), 3000), QStringLiteral("b"));
+    }
+
+    // Steam: the loading window closes, a window of another pid follows.
+    void testHandoverWindowOpenedAfterClose()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("loading"), 100, Steam, 500)), 0);
+        QVERIFY(!m.release(QStringLiteral("loading"), 3000));
+        const auto c = m.claim(windowWithId(QStringLiteral("main"), 200, Steam, 3300));
+        QVERIFY(c);
+        QCOMPARE(c->launchId, 0);
+        QCOMPARE(c->rect, QRect(0, 0, 100, 100));
+    }
+
+    // A second startup window that already closed does not take the slot;
+    // the window that opens after the close does.
+    void testClosedUnmatchedWindowGetsNoHandover()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("b"), 100, Discord, 1000));
+        QVERIFY(!m.release(QStringLiteral("b"), 1200));
+        QCOMPARE(handoverId(m, QStringLiteral("a"), 1500), QString());
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("main"), 100, Discord, 1800)), 0);
+    }
+
+    void testHandoverWindowMoreThanGapBeforeCloseIsIgnored()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("b"), 100, Discord, 1999));
+        QCOMPARE(handoverId(m, QStringLiteral("a"), 3000), QString());
+    }
+
+    void testHandoverWindowMoreThanGapAfterCloseIsIgnored()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Steam, 0));
+        QVERIFY(!m.release(QStringLiteral("a"), 3000));
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("b"), 200, Steam, 4001)), -1);
+        // Exactly at the limit it still matches.
+        Matcher m2(Timeout);
+        m2.addPending(launch(0, 100, Steam, 0));
+        claimedId(m2, windowWithId(QStringLiteral("a"), 100, Steam, 0));
+        m2.release(QStringLiteral("a"), 3000);
+        QCOMPARE(claimedId(m2, windowWithId(QStringLiteral("b"), 200, Steam, 4000)), 0);
+    }
+
+    void testCloseAfterWatchTimeDoesNotRearm()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Steam, 1000));
+        QVERIFY(!m.release(QStringLiteral("a"), 1000 + Matcher::HandoverWatchMs + 1));
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("b"), 200, Steam, 1000 + Matcher::HandoverWatchMs + 2)), -1);
+    }
+
+    void testCloseAtWatchTimeStillRearms()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Steam, 1000));
+        const qint64 close = 1000 + Matcher::HandoverWatchMs;
+        QVERIFY(!m.release(QStringLiteral("a"), close));
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("b"), 200, Steam, close + 10)), 0);
+    }
+
+    // The watch time counts from the first placement, not from a hand-over.
+    void testChainedHandoverCountsFromFirstPlacement()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Discord, 0));
+        // First hand-over, 4 min in.
+        claimedId(m, windowWithId(QStringLiteral("b"), 100, Discord, 240000));
+        QCOMPARE(handoverId(m, QStringLiteral("a"), 240100), QStringLiteral("b"));
+        // Second hand-over, 4.9 min in: still watched.
+        claimedId(m, windowWithId(QStringLiteral("c"), 100, Discord, 294000));
+        QCOMPARE(handoverId(m, QStringLiteral("b"), 294500), QStringLiteral("c"));
+        // Third close at 5 min + 1 ms after the first placement: no hand-over.
+        claimedId(m, windowWithId(QStringLiteral("d"), 100, Discord, 300000));
+        QCOMPARE(handoverId(m, QStringLiteral("c"), 300001), QString());
+    }
+
+    void testChainedHandoverByClaimAfterClose()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Steam, 0));
+        m.release(QStringLiteral("a"), 100000);
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("b"), 200, Steam, 100100)), 0);
+        m.release(QStringLiteral("b"), 200000);
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("c"), 300, Steam, 200100)), 0);
+        // 300001 ms after the first placement.
+        QVERIFY(!m.release(QStringLiteral("c"), 300001));
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("d"), 400, Steam, 300100)), -1);
+    }
+
+    // An app that keeps two windows open: the second one gets nothing.
+    void testTwoOpenWindowsGetNoHandover()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Konsole, 0));
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("a"), 100, Konsole, 100)), 0);
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("b"), 100, Konsole, 200)), -1);
+        // Closing an unplaced window does nothing.
+        QVERIFY(!m.release(QStringLiteral("b"), 5000));
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("c"), 100, Konsole, 5100)), -1);
+    }
+
+    void testOrdinaryPendingBeatsRearmed()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Steam, 0));
+        m.addPending(launch(1, 0, Steam, 1000));
+        m.release(QStringLiteral("a"), 2000);
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("b"), 200, Steam, 2100)), 1);
+        // The re-armed launch is still waiting for the next one.
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("c"), 300, Steam, 2200)), 0);
+    }
+
+    // The launcher reports the pid after the window was claimed.
+    void testSetPidAfterClaimUsedByHandover()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 0, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Discord, 0));
+        QVERIFY(m.setPid(0, 555));
+        // Not the app id, not the closed pid: only the launch pid links it.
+        claimedId(m, windowWithId(QStringLiteral("b"), 555, QStringLiteral("other"), 1000));
+        QCOMPARE(handoverId(m, QStringLiteral("a"), 1100), QStringLiteral("b"));
+    }
+
+    void testSetPidAfterCloseUsedByClaim()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 0, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Discord, 0));
+        m.release(QStringLiteral("a"), 1000);
+        QVERIFY(m.setPid(0, 555));
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("b"), 555, QStringLiteral("other"), 1100)), 0);
+    }
+
+    void testHandoverUnrelatedWindowIsIgnored()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("x"), 900, Dolphin, 1500));
+        QCOMPARE(handoverId(m, QStringLiteral("a"), 2000), QString());
+        QCOMPARE(claimedId(m, windowWithId(QStringLiteral("y"), 901, Dolphin, 2100)), -1);
+    }
+
+    void testHandoverPicksNewestWindow()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Discord, 0));
+        claimedId(m, windowWithId(QStringLiteral("b"), 100, Discord, 1500));
+        claimedId(m, windowWithId(QStringLiteral("c"), 100, Discord, 1600));
+        QCOMPARE(handoverId(m, QStringLiteral("a"), 2000), QStringLiteral("c"));
+    }
+
+    void testReleaseUnknownWindow()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Discord, 0));
+        QVERIFY(!m.release(QStringLiteral("nope"), 100));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Discord, 0));
+        QVERIFY(!m.release(QStringLiteral("nope"), 100));
+        // A window hands over once: a second close of it is unknown.
+        QVERIFY(!m.release(QStringLiteral("a"), 200));
+        QVERIFY(!m.release(QStringLiteral("a"), 300));
+    }
+
+    void testRearmedExpiresSilently()
+    {
+        Matcher m(Timeout);
+        m.addPending(launch(0, 100, Steam, 0));
+        claimedId(m, windowWithId(QStringLiteral("a"), 100, Steam, 0));
+        m.release(QStringLiteral("a"), 1000);
+        QCOMPARE(m.pendingCount(), 0);
+        QVERIFY(m.expire(1000000).isEmpty());
     }
 };
 

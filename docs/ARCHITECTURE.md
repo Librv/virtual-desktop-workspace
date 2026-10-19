@@ -140,6 +140,7 @@ numbers arrive as int32, so integer parameters are `i`).
 | | `CaptureCurrentDesktop(s name) -> s` | new workspace id, or `"error: ..."` (T6) |
 | | `ReloadConfig()` | re-read `vdwrc`, re-register shortcuts |
 | `/Script`, `io.github.librv.vdw.Script` | `ClaimWindow(s windowJson) -> s` | called by the KWin script on `windowAdded`; returns `{rect, group, order}` JSON or `""` |
+| | `ReleaseWindow(s windowJson) -> s` | called by the KWin script on `windowRemoved` for every window it sent to `ClaimWindow`, with `{id}`; returns `{id, rect, group, order}` JSON of the window that takes the slot (hand-over) or `""` |
 | | `QueryResult(s requestId, s json)` | answers of one-shot query scripts |
 | | `CursorPos(i x, i y)` | pointer position for the radial menu center |
 | `/Debug`, `io.github.librv.vdw.Debug` | `Press(s shortcut)`, `Release(s shortcut)`, `ModifiersHeld(b)` | only when started with `--debug`: feed the state machine through the same path as real input; `shortcut` is `main` or a workspace id |
@@ -160,6 +161,12 @@ numbers arrive as int32, so integer parameters are `i`).
   windows of that group in slot order with `workspace.raiseWindow`, so the
   last slot ends on top whatever order the apps map in. Other windows and
   focus are not touched.
+- **Closes:** the script remembers the `internalId` of each window it sent to
+  `ClaimWindow` and still has open. When one of them closes it calls
+  `ReleaseWindow({id})`. If the daemon answers with a claim, the script
+  applies it to the window the daemon named, as above. An empty answer means
+  nothing to do. The daemon uses this for the hand-over rule in "Matching
+  windows to launches".
 - **One-shot query scripts** for the emptiness check, the usable area, the
   window list (T6) and the cursor position: loaded, run, they answer through
   `QueryResult`/`CursorPos`, then unloaded.
@@ -183,6 +190,25 @@ assignments out):
    (`resourceClass` if empty), for apps that share one process.
 3. Entries expire after `PlacementTimeoutMs` (10 s). A launch that opens no
    window is normal (e.g. Kate handing off to a running instance).
+
+Hand-over: some apps show a startup window first. Discord opens an updater
+window, its main window opens 2 s later (same pid and app id), and the updater
+closes 0.1 s after that. Steam closes its loading window, and the next window
+opens 0.3 s later (other pid, app id from `resourceClass`). The first window
+still gets the slot. A launch whose window closed waits for a hand-over:
+
+- If another window of the same launch opens within `HandoverGapMs` (1 s) of
+  the close, before or after it, this window takes the slot. "Of the same
+  launch" means the same pid as the launch or the closed window, or the same
+  app id as the launch.
+- The close must be within `HandoverWatchMs` (5 min) of the first placement of
+  the launch. A replacement can be replaced again, but the time always counts
+  from the first placement.
+- If both windows stay open, there is no hand-over.
+- Ordinary pending launches match before launches that wait for a hand-over.
+
+No window property tells a startup window apart from a real window, so the
+rule uses no resizability or caption test.
 
 Windows that match nothing are left alone. Activation tokens are not visible
 to KWin scripts, so they are not used. Captions are not stable; never match
