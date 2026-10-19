@@ -51,6 +51,7 @@ rewrite old entries, add a new one that supersedes them.
 | 42 | 2026-10-19 | The reply to an open goes out after vdwd starts each slot that is not in a browser queue. Queued slots start later, and their launch failures go to the log only. vdwd stays busy until the queue is empty | Each queued slot can wait up to the placement timeout (10 s), and `vdwctl` stops after 10 s |
 | 43 | 2026-10-19 | M3 notification: vdwd sends a notification for a missing profile and for an unreadable profile list, one for each slot. The text names the app (display name) and the name of the profile folder | In both cases the browser opens the wrong profile. A missing profile has no display name |
 | 44 | 2026-10-19 | vdwd links KF6 Notifications, which pulls in libQt6Gui. vdwd still starts no `QGuiApplication`. This changes 32 only for this library | Idle vdwd goes from 18 MB to 23 MB RSS (1.6 MB to 2.9 MB private), far below the 49 MB of a Qt GUI process. The notification shows in System Settings. User approved it |
+| 45 | 2026-10-19 | When the user changes the app of a slot in the KCM, the KCM clears the `Profile` of the slot. The KCM shows a saved profile that is not in `Local State` as "<folder> (missing)" | A profile folder belongs to one browser. The user must see that the saved profile does not exist |
 
 ## Open
 

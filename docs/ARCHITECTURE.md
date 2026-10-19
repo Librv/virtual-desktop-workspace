@@ -291,6 +291,10 @@ QML KCM to list, create, edit and delete workspaces, set the default, edit
 slots, and trigger "Save current desktop as workspace". Shortcuts link to the
 standard Shortcuts page rather than reimplementing a key editor.
 
+For a slot of a known browser, the slot editor shows a "Profile" box. The KCM
+reads the `Local State` file of the browser each time the app or the profile
+of the slot changes. It writes only the profile folder name to vdwrc.
+
 ## Testing
 
 - **Unit tests (Qt Test):** gesture state machine, config parsing, window
