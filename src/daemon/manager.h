@@ -7,6 +7,7 @@
 #include "matcher.h"
 
 #include <QDBusContext>
+#include <QHash>
 #include <QJsonArray>
 #include <QObject>
 #include <QRect>
@@ -14,6 +15,7 @@
 #include <QTimer>
 
 #include <functional>
+#include <memory>
 
 namespace Vdw
 {
@@ -73,6 +75,12 @@ private:
     /// Restart the expiry timer at the matcher's next deadline. Held launches
     /// move it, so call it after each change of the matcher.
     void armExpiry();
+    /// Start the next slot of every launch chain whose previous launch is no
+    /// longer pending (claimed, expired or failed).
+    void advanceChains();
+
+    struct OpenRun;
+    void startChainSlot(const std::shared_ptr<OpenRun> &run, int chain, int pos);
 
     Config m_config;
     QString m_configPath;
@@ -82,6 +90,9 @@ private:
     QTimer m_expiryTimer;
     int m_nextLaunchId = 0;
     int m_nextOpenId = 0;
+    /// Per pending launch that has a successor in its chain: starts that
+    /// successor. Entries go when the launch is no longer pending.
+    QHash<int, std::function<void()>> m_chainNext;
     bool m_opening = false; ///< a non-forced open is between its checks and its launches
 };
 

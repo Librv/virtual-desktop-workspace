@@ -162,4 +162,31 @@ ProfileLaunch slotLaunch(const Slot &slot, LocalStateCache &cache)
     return profileLaunch(slot.args, slot.profile, it->first, it->second);
 }
 
+QList<QList<int>> launchChains(const QList<Slot> &slots)
+{
+    QHash<const Browser *, int> browserSlots;
+    for (const Slot &slot : slots) {
+        if (const Browser *browser = findBrowser(slot.app)) {
+            ++browserSlots[browser];
+        }
+    }
+    QList<QList<int>> chains;
+    QHash<const Browser *, int> chainOf;
+    for (int i = 0; i < slots.size(); ++i) {
+        const Browser *browser = findBrowser(slots.at(i).app);
+        if (!browser || browserSlots.value(browser) < 2) {
+            chains.append(QList<int>{i});
+            continue;
+        }
+        const auto it = chainOf.constFind(browser);
+        if (it == chainOf.constEnd()) {
+            chainOf.insert(browser, chains.size());
+            chains.append(QList<int>{i});
+        } else {
+            chains[*it].append(i);
+        }
+    }
+    return chains;
+}
+
 }

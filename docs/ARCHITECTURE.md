@@ -244,6 +244,21 @@ accepted: an app whose only window is fixed-size is never placed, and while
 such a window is open its launch counts as busy for up to 5 min.
 
 The rules use no caption test.
+A browser (Chromium type) gives a new window to its running process. Two
+windows of one browser then share the pid and the app id, so rule 2 can give a
+window to the wrong slot. To prevent this, vdwd launches the slots of one
+browser one at a time, in slot order (`launchChains`, pure and unit-tested).
+This applies when the workspace has two or more slots of that browser. Other
+slots are a chain of one and launch at once.
+
+The previous entry of a chain leaves the pending list in `claimWindow`,
+`expirePending` or a failed launch. The next slot starts in that same call.
+Thus the pending count is never 0 while a chain has slots left. `order`
+stays equal to the slot index and `group` stays one id per open.
+
+The reply to an open goes out when each chain has a launch that started, or
+has no slots left. It is `error: <first error>` only when no launch started,
+else `opened`. Failures after the reply go to the log only.
 
 Windows that match nothing are left alone. Activation tokens are not visible
 to KWin scripts, so they are not used. Captions are not stable; never match

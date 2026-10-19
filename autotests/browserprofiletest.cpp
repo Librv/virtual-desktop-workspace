@@ -14,6 +14,7 @@
 using namespace Vdw;
 
 Q_DECLARE_METATYPE(QList<Vdw::BrowserProfile>)
+Q_DECLARE_METATYPE(QList<QList<int>>)
 
 class BrowserProfileTest : public QObject
 {
@@ -275,6 +276,34 @@ private Q_SLOTS:
         launch = slotLaunch(second, fresh);
         QCOMPARE(launch.args, QString());
         QVERIFY(!launch.warning.isEmpty());
+    }
+
+    void launchChainsGroupsBrowserSlots_data()
+    {
+        QTest::addColumn<QStringList>("apps");
+        QTest::addColumn<QStringList>("profiles");
+        QTest::addColumn<QList<QList<int>>>("expected");
+
+        const QString h = QStringLiteral("helium");
+        const QString k = QStringLiteral("org.kde.konsole");
+        QTest::newRow("no slots") << QStringList() << QStringList() << QList<QList<int>>();
+        QTest::newRow("no browsers") << QStringList{k, k} << QStringList{"", ""} << QList<QList<int>>{{0}, {1}};
+        QTest::newRow("one helium") << QStringList{k, h} << QStringList{"", "Default"} << QList<QList<int>>{{0}, {1}};
+        QTest::newRow("two helium, profile on one") << QStringList{h, k, h, k} << QStringList{"Default", "", "", ""} << QList<QList<int>>{{0, 2}, {1}, {3}};
+        QTest::newRow("two helium, no profile") << QStringList{k, h, k, h} << QStringList{"", "", "", ""} << QList<QList<int>>{{0}, {1, 3}, {2}};
+        QTest::newRow("three helium") << QStringList{h, h, h} << QStringList{"", "Default", ""} << QList<QList<int>>{{0, 1, 2}};
+    }
+
+    void launchChainsGroupsBrowserSlots()
+    {
+        QFETCH(QStringList, apps);
+        QFETCH(QStringList, profiles);
+        QFETCH(QList<QList<int>>, expected);
+        QList<Slot> slots;
+        for (int i = 0; i < apps.size(); ++i) {
+            slots.append({apps.at(i), QString(), {}, profiles.at(i)});
+        }
+        QCOMPARE(launchChains(slots), expected);
     }
 };
 

@@ -78,6 +78,15 @@ desktops are created.
 - While a fixed-size window of a launch is open, the launch counts as busy
   for up to 5 minutes after the launch. The desktop then asks for
   confirmation, as with other busy desktops.
+- Apps launch at the same time, with one exception: a browser gives a new
+  window to its running process. When a workspace has two or more slots of
+  one browser, vdwd launches those slots one at a time, in slot order. The
+  next browser slot starts when the window of the previous slot is placed,
+  when the placement timeout ends, or when its launch fails.
+- The reply to an open ("opened") goes out when each group of slots has one
+  launch that started, or has no slots left. The reply is an error only when
+  no launch started. Browser slots that start after the reply write a failure
+  to the log only.
 - If the saved browser profile does not exist, or vdwd cannot read the
   profile list of the browser, the browser opens its last-used profile.
   vdwd then writes a warning to its log. vdwd never tells the browser to use a

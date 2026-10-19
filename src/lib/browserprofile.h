@@ -68,4 +68,12 @@ using LocalStateCache = QHash<QString, std::pair<QList<BrowserProfile>, QString>
 /// changed; for other slots `args` is `slot.args` and there is no warning.
 ProfileLaunch slotLaunch(const Slot &slot, LocalStateCache &cache);
 
+/// Slot indices grouped into launch chains. Slots in one chain launch one at a
+/// time, in slot order, because a browser hands a new window to its running
+/// process: the windows then share pid and app id and cannot be told apart.
+/// All slots of one known browser form one chain when the workspace has 2 or
+/// more of them, with or without a profile. Every other slot is a chain of
+/// one. Chains are ordered by the index of their first slot.
+QList<QList<int>> launchChains(const QList<Slot> &slots);
+
 }

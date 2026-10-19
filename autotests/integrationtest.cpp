@@ -31,6 +31,7 @@
 
 #include <unistd.h>
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 
@@ -1079,6 +1080,102 @@ private Q_SLOTS:
         // Registration is asynchronous: give it time to (wrongly) overwrite.
         QTest::qWait(2000);
         QCOMPARE(mainChord(), user);
+    }
+
+    // Two slots of one browser share the process and the app id, like
+    // Chromium windows. The fake browser shows the window of a second launch
+    // before its own first one, so parallel launches would swap the slots.
+    void testBrowserSlotsKeepTheirProfiles()
+    {
+        QVERIFY(closeAll());
+        auto *iface = QDBusConnection::sessionBus().interface();
+        // Declared first, so it runs last: later tests get the normal daemon
+        // back on every exit, also a failed QVERIFY.
+        const auto restoreDaemon = qScopeGuard([this, iface] {
+            m_daemon->terminate();
+            m_daemon->waitForFinished(5000);
+            for (int i = 0; i < 50 && iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")); ++i) {
+                QTest::qWait(100);
+            }
+            m_daemon = std::make_unique<QProcess>();
+            m_daemon->setProcessChannelMode(QProcess::ForwardedChannels);
+            m_daemon->start(QStringLiteral(VDWD_PATH), {QStringLiteral("--config"), m_dir.filePath(QStringLiteral("vdwrc")), QStringLiteral("--debug")});
+            m_daemon->waitForStarted();
+            for (int i = 0; i < 150 && !iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")); ++i) {
+                QTest::qWait(100);
+            }
+        });
+        m_daemon->terminate();
+        QVERIFY(m_daemon->waitForFinished(5000));
+        QTRY_VERIFY_WITH_TIMEOUT(!iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")), 5000);
+
+        QTemporaryDir configHome;
+        QVERIFY(configHome.isValid());
+        QVERIFY(QDir().mkpath(configHome.filePath(QStringLiteral("net.imput.helium"))));
+        QFile state(configHome.filePath(QStringLiteral("net.imput.helium/Local State")));
+        QVERIFY(state.open(QIODevice::WriteOnly));
+        state.write(R"({"profile": {"info_cache": {"Default": {"name": "One"}, "Profile 1": {"name": "Two"}}}})");
+        state.close();
+
+        const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+        QVERIFY(dataDir.contains(QLatin1String("/vdw")));
+        QVERIFY(QDir().mkpath(dataDir + QStringLiteral("/applications")));
+        const QString desktopPath = dataDir + QStringLiteral("/applications/helium.desktop");
+        QFile desktop(desktopPath);
+        QVERIFY(desktop.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        desktop.write(QStringLiteral("[Desktop Entry]\nType=Application\nName=Helium\nExec=%1 --socket %2 %U\n")
+                          .arg(QStringLiteral(FAKEBROWSER_PATH), configHome.filePath(QStringLiteral("sock")))
+                          .toUtf8());
+        desktop.close();
+        const auto removeDesktop = qScopeGuard([&desktopPath] {
+            QFile::remove(desktopPath);
+        });
+
+        QFile cfg(m_dir.filePath(QStringLiteral("vdwrc-browser")));
+        QVERIFY(cfg.open(QIODevice::WriteOnly));
+        cfg.write(
+            "[General]\nDefaultWorkspace=web\n\n"
+            "[Workspace][web]\nName=Web\nOrder=0\n\n"
+            "[Workspace][web][Slot][0]\nApp=helium\nProfile=Default\nGeometry=0,0,0.5,1\n\n"
+            "[Workspace][web][Slot][1]\nApp=org.kde.konsole\nGeometry=0.5,0,0.5,0.5\n\n"
+            "[Workspace][web][Slot][2]\nApp=helium\nProfile=Profile 1\nGeometry=0.5,0.5,0.5,0.5\n");
+        cfg.close();
+
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("XDG_CONFIG_HOME"), configHome.path());
+        m_daemon = std::make_unique<QProcess>();
+        m_daemon->setProcessChannelMode(QProcess::ForwardedChannels);
+        m_daemon->setProcessEnvironment(env);
+        m_daemon->start(QStringLiteral(VDWD_PATH), {QStringLiteral("--config"), cfg.fileName(), QStringLiteral("--debug")});
+        QVERIFY(m_daemon->waitForStarted());
+        QTRY_VERIFY_WITH_TIMEOUT(iface->isServiceRegistered(QStringLiteral("io.github.librv.vdw")), 15000);
+        // Runs before the daemon, the desktop file and the config dir go away.
+        const auto closeWindows = qScopeGuard([this] {
+            closeAll();
+        });
+
+        QCOMPARE(ctl({QStringLiteral("open"), QStringLiteral("web")}).out, QStringLiteral("opened"));
+        QTRY_VERIFY_WITH_TIMEOUT(snapshot().windows.size() == 3, 20000);
+        QTest::qWait(1500);
+        const Snapshot snap = snapshot();
+        QCOMPARE(snap.windows.size(), 3);
+        const QList<QPair<QString, QRectF>> expected = {{QStringLiteral("Default"), QRectF(0, 0, 0.5, 1)},
+                                                        {QStringLiteral("Profile 1"), QRectF(0.5, 0.5, 0.5, 0.5)}};
+        for (const auto &[caption, fraction] : expected) {
+            const auto it = std::find_if(snap.windows.cbegin(), snap.windows.cend(), [&caption](const Window &w) {
+                return w.title == caption;
+            });
+            QVERIFY2(it != snap.windows.cend(), qPrintable(QStringLiteral("no window titled %1").arg(caption)));
+            const QRect want = Vdw::Layout::slotRect(snap.area, fraction);
+            QVERIFY2(near(it->rect, want),
+                     qPrintable(
+                         QStringLiteral("%1 is at %2,%3 %4x%5").arg(caption).arg(it->rect.x()).arg(it->rect.y()).arg(it->rect.width()).arg(it->rect.height())));
+        }
+        const auto konsole = std::find_if(snap.windows.cbegin(), snap.windows.cend(), [](const Window &w) {
+            return w.cls == QLatin1String("org.kde.konsole");
+        });
+        QVERIFY(konsole != snap.windows.cend());
+        QVERIFY(near(konsole->rect, Vdw::Layout::slotRect(snap.area, QRectF(0.5, 0, 0.5, 0.5))));
     }
 
     // Runs last: replaces the daemon with one that has no vdwrc (in its own

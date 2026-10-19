@@ -47,6 +47,10 @@ ecm_add_test(shortcutkeystest.cpp
 add_executable(startupwindowhelper startupwindowhelper.cpp)
 target_link_libraries(startupwindowhelper PRIVATE Qt6::Gui)
 
+# Stands in for Helium in integrationtest: one process, many windows.
+add_executable(fakebrowser fakebrowser.cpp)
+target_link_libraries(fakebrowser PRIVATE Qt6::Gui Qt6::Network)
+
 # Skips unless run inside the nested session:
 #   scripts/dev-session.sh run -- ctest --preset dev -R integrationtest
 ecm_add_test(integrationtest.cpp
@@ -60,5 +64,6 @@ target_compile_definitions(integrationtest PRIVATE
     S1INJECT_PATH="${CMAKE_SOURCE_DIR}/spikes/S1/build/s1inject"
     S2FAKEINPUT_PATH="${CMAKE_SOURCE_DIR}/spikes/S2/build/s2-fakeinput"
     STARTUPHELPER_PATH="$<TARGET_FILE:startupwindowhelper>"
+    FAKEBROWSER_PATH="$<TARGET_FILE:fakebrowser>"
 )
-add_dependencies(integrationtest vdwd vdw-ui vdwctl startupwindowhelper)
+add_dependencies(integrationtest vdwd vdw-ui vdwctl startupwindowhelper fakebrowser)

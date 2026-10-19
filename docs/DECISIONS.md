@@ -47,6 +47,8 @@ rewrite old entries, add a new one that supersedes them.
 | 38 | 2026-10-19 | `vdwctl capture` and the KCM capture leave `Profile` empty | Wayland gives no reliable profile for each window |
 | 39 | 2026-10-19 | Only browser slots with a profile, when a workspace has more than one of the same browser, launch one at a time. All other slots launch in parallel | Chromium gives all new windows to the running process, so the matcher can swap them (T8 M2) |
 | 40 | 2026-10-19 | vdwd merges the profile into `Args` before it sends the launch to `vdw-ui`. The launch message stays `{app, args}` | `vdw-ui`, `UiClient` and `Launcher` do not change, and the merge logic stays in `src/lib` where unit tests cover it |
+| 41 | 2026-10-19 | Supersedes 39. When a workspace has two or more slots of the same browser, all these slots launch one at a time, with or without a profile. All other slots launch in parallel | A slot with a profile and a slot with the last-used profile can also swap, and so can two slots with different Args |
+| 42 | 2026-10-19 | The reply to an open goes out after vdwd starts each slot that is not in a browser queue. Queued slots start later, and their launch failures go to the log only. vdwd stays busy until the queue is empty | Each queued slot can wait up to the placement timeout (10 s), and `vdwctl` stops after 10 s |
 
 ## Open
 
