@@ -28,8 +28,13 @@ Item {
         id: ring
         x: menu.centerX
         y: menu.centerY
-        NumberAnimation on opacity { from: 0; to: 1; duration: Kirigami.Units.shortDuration }
-        NumberAnimation on scale { from: 0.85; to: 1; duration: Kirigami.Units.shortDuration; easing.type: Easing.OutCubic }
+        // Same timing as KWin's window open effect. Start on the first frame:
+        // the scene loads before the compositor maps the window, so an
+        // animation started on load is mostly done before it is visible.
+        opacity: menu.shown ? 1 : 0
+        scale: menu.shown ? 1 : 0.8
+        Behavior on opacity { NumberAnimation { duration: Kirigami.Units.longDuration; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: Kirigami.Units.longDuration; easing.type: Easing.OutCubic } }
 
         Repeater {
             model: root.count

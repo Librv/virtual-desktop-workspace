@@ -29,6 +29,8 @@ class RadialMenuScene : public QObject
     Q_PROPERTY(qreal centerY READ centerY CONSTANT)
     Q_PROPERTY(int selected READ selected NOTIFY selectedChanged)
     Q_PROPERTY(qreal deadZone READ deadZone CONSTANT)
+    // True once the window has drawn its first frame.
+    Q_PROPERTY(bool shown READ shown NOTIFY shownChanged)
 
 public:
     RadialMenuScene(QPoint center, const QVector<RadialMenu::Item> &items)
@@ -61,6 +63,19 @@ public:
         return deadZoneRadius;
     }
 
+    bool shown() const
+    {
+        return m_shown;
+    }
+
+    void markShown()
+    {
+        if (!m_shown) {
+            m_shown = true;
+            Q_EMIT shownChanged();
+        }
+    }
+
     QString selectedId() const
     {
         return m_selected >= 0 && m_selected < m_items.size() ? m_items.at(m_selected).id : QString();
@@ -83,12 +98,14 @@ public:
 
 Q_SIGNALS:
     void selectedChanged();
+    void shownChanged();
 
 private:
     QPointF m_center;
     QVector<RadialMenu::Item> m_items;
     QVariantList m_slices;
     int m_selected = -1;
+    bool m_shown = false;
 };
 
 RadialMenu::RadialMenu(QObject *parent)
@@ -128,8 +145,14 @@ void RadialMenu::show(QPoint center, const QVector<Item> &items)
     layerWindow->setExclusiveZone(-1);
     layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
     layerWindow->setActivateOnShow(false);
-    layerWindow->setScope(QStringLiteral("vdw-radial-menu"));
+    // KWin maps an unknown scope to a normal window, and its scale effect then
+    // zooms the whole full-screen overlay around the screen center. "utility"
+    // is skipped by the scale, fade and fadingpopups effects, so only the QML
+    // animation runs, centered on the pointer.
+    layerWindow->setScope(QStringLiteral("utility"));
 
+    // frameSwapped comes from the render thread, so queue it to the scene.
+    connect(m_view.get(), &QQuickWindow::frameSwapped, m_scene.get(), &RadialMenuScene::markShown, Qt::QueuedConnection);
     m_view->show();
 }
 
