@@ -3,6 +3,7 @@
 
 #include "vdwkcm.h"
 
+#include "browserprofile.h"
 #include "config.h"
 #include "configwriter.h"
 #include "dbusnames.h"
@@ -34,6 +35,30 @@ VdwKcm::VdwKcm(QObject *parent, const KPluginMetaData &data)
 QVariantMap VdwKcm::appInfo(const QString &desktopId) const
 {
     return AppModel::lookup(desktopId);
+}
+
+QVariantMap VdwKcm::browserProfiles(const QString &app, const QString &profile) const
+{
+    const Browser *browser = findBrowser(app);
+    if (!browser) {
+        return {{QStringLiteral("isBrowser"), false}, {QStringLiteral("choices"), QVariantList()}, {QStringLiteral("error"), QString()}};
+    }
+    QString error;
+    const QList<BrowserProfile> profiles = readLocalState(userDataDir(*browser), &error);
+    QVariantList choices;
+    for (const ProfileChoice &choice : profileChoices(profiles, profile)) {
+        choices.append(QVariantMap{
+            {QStringLiteral("dir"), choice.dir},
+            {QStringLiteral("name"), choice.name},
+            {QStringLiteral("missing"), choice.missing},
+        });
+    }
+    return {{QStringLiteral("isBrowser"), true}, {QStringLiteral("choices"), choices}, {QStringLiteral("error"), error}};
+}
+
+bool VdwKcm::hasProfileOption(const QString &args) const
+{
+    return Vdw::hasProfileOption(args);
 }
 
 void VdwKcm::load()

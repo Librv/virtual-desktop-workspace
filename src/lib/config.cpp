@@ -22,7 +22,7 @@ namespace
 {
 
 const QStringList workspaceKeys = {QStringLiteral("Name"), QStringLiteral("Icon"), QStringLiteral("Order")};
-const QStringList slotKeys = {QStringLiteral("App"), QStringLiteral("Args"), QStringLiteral("Geometry")};
+const QStringList slotKeys = {QStringLiteral("App"), QStringLiteral("Args"), QStringLiteral("Profile"), QStringLiteral("Geometry")};
 const QStringList generalKeys = {QStringLiteral("DefaultWorkspace"),
                                  QStringLiteral("HoldThresholdMs"),
                                  QStringLiteral("ConfirmTimeoutMs"),
@@ -146,6 +146,7 @@ Config Config::load(const KConfig &config)
                 continue;
             }
             slot.args = g.readEntry("Args", QString());
+            slot.profile = g.readEntry("Profile", QString()).trimmed();
             if (!parseGeometry(g.readEntry("Geometry", QString()), slot.geometry)) {
                 warn(result.m_warnings, QStringLiteral("%1: bad or missing Geometry (want x,y,width,height as fractions 0..1), slot skipped").arg(slotWhere));
                 continue;

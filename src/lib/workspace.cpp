@@ -13,6 +13,7 @@ QJsonObject Slot::toJson() const
     return QJsonObject{
         {QStringLiteral("app"), app},
         {QStringLiteral("args"), args},
+        {QStringLiteral("profile"), profile},
         {QStringLiteral("geometry"),
          QJsonObject{
              {QStringLiteral("x"), geometry.x()},

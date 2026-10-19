@@ -17,6 +17,7 @@ struct Slot {
     QString app; ///< .desktop id, e.g. "org.kde.konsole"
     QString args; ///< one string, split with KShell::splitArgs at launch time
     QRectF geometry; ///< x, y, width, height as fractions
+    QString profile; ///< Chromium profile directory, e.g. "Profile 1"; empty = last used
 
     bool operator==(const Slot &other) const = default;
     QJsonObject toJson() const;

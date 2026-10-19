@@ -107,6 +107,10 @@ public:
     /// `nowMs`. Also drops stale hand-over state, silently.
     QList<PendingLaunch> expire(qint64 nowMs);
 
+    /// True while `launchId` is pending (not claimed, expired or removed). A
+    /// held launch is pending.
+    bool contains(int launchId) const;
+
     /// Launches that wait for their first window (not hand-over state). A
     /// held launch counts.
     int pendingCount() const

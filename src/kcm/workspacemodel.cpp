@@ -5,12 +5,34 @@
 
 #include "configwriter.h"
 
+#include <QCollator>
 #include <QSet>
 
 #include <algorithm>
 
 namespace Vdw
 {
+
+QList<ProfileChoice> profileChoices(const QList<BrowserProfile> &profiles, const QString &saved)
+{
+    QCollator collator;
+    collator.setNumericMode(true);
+    QList<ProfileChoice> choices;
+    for (const BrowserProfile &profile : profiles) {
+        choices.append({profile.dir, profile.name, false});
+    }
+    std::sort(choices.begin(), choices.end(), [&collator](const ProfileChoice &a, const ProfileChoice &b) {
+        const int byName = collator.compare(a.name, b.name);
+        return byName != 0 ? byName < 0 : a.dir < b.dir;
+    });
+    const bool known = std::any_of(profiles.cbegin(), profiles.cend(), [&saved](const BrowserProfile &p) {
+        return p.dir == saved;
+    });
+    if (!saved.isEmpty() && !known) {
+        choices.append({saved, saved, true});
+    }
+    return choices;
+}
 
 WorkspaceModel::WorkspaceModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -283,6 +305,8 @@ QVariant SlotModel::data(const QModelIndex &index, int role) const
         return slot->app;
     case ArgsRole:
         return slot->args;
+    case ProfileRole:
+        return slot->profile;
     case XRole:
         return slot->geometry.x();
     case YRole:
@@ -309,11 +333,20 @@ bool SlotModel::setData(const QModelIndex &index, const QVariant &value, int rol
     bool ok = true;
     const double number = value.toDouble(&ok);
     switch (role) {
-    case AppRole:
-        slot.app = value.toString().trimmed();
+    case AppRole: {
+        const QString app = value.toString().trimmed();
+        if (app != slot.app) {
+            // A profile folder belongs to one browser.
+            slot.profile.clear();
+        }
+        slot.app = app;
         break;
+    }
     case ArgsRole:
         slot.args = value.toString();
+        break;
+    case ProfileRole:
+        slot.profile = value.toString().trimmed();
         break;
     case XRole:
         g.moveLeft(number);
@@ -349,6 +382,7 @@ QHash<int, QByteArray> SlotModel::roleNames() const
     return {
         {AppRole, "app"},
         {ArgsRole, "args"},
+        {ProfileRole, "profile"},
         {XRole, "geoX"},
         {YRole, "geoY"},
         {WidthRole, "geoWidth"},

@@ -44,7 +44,11 @@ static QList<Workspace> sample()
     c.id = "alpha";
     c.name = "Alpha";
     c.icon = "kate";
-    c.slots = {{"org.kde.kate", "-n \"a b\"", QRectF(0.25, 0.125, 0.75, 0.875)}};
+    c.slots = {
+        {"org.kde.kate", "-n \"a b\"", QRectF(0.25, 0.125, 0.75, 0.875), ""},
+        {"helium", "--incognito", QRectF(0, 0, 0.5, 0.5), "Profile 1"},
+        {"helium", "", QRectF(0.5, 0, 0.5, 0.5), QString::fromUtf8("Профиль 日本")},
+    };
     // Deliberately not sorted by name, so only the list order can explain Order.
     return {a, b, c};
 }
@@ -75,6 +79,7 @@ void ConfigWriterTest::roundTrip()
         for (int s = 0; s < want.slots.size(); ++s) {
             QCOMPARE(got.slots.at(s).app, want.slots.at(s).app);
             QCOMPARE(got.slots.at(s).args, want.slots.at(s).args);
+            QCOMPARE(got.slots.at(s).profile, want.slots.at(s).profile);
             const QRectF g = got.slots.at(s).geometry;
             const QRectF w = want.slots.at(s).geometry;
             QVERIFY(qAbs(g.x() - w.x()) < 1e-6);
@@ -106,6 +111,16 @@ void ConfigWriterTest::exactFormat()
     QVERIFY(text.contains("[Workspace][3-konsoles]\nIcon=utilities-terminal\nName=3 Konsoles\nOrder=0\n")
             || text.contains("[Workspace][3-konsoles]\nName=3 Konsoles\n"));
     QVERIFY(text.contains("[Workspace][3-konsoles][Slot][0]\nApp=org.kde.konsole\nArgs=\nGeometry=0.5,0,0.5,0.5\n"));
+
+    {
+        a.slots = {{"helium", "--incognito", QRectF(0, 0, 1, 1), "Profile 1"}};
+        KConfig file(path, KConfig::SimpleConfig);
+        ConfigWriter::write(file, {a}, "3-konsoles");
+        QVERIFY(file.sync());
+    }
+    QFile f2(path);
+    QVERIFY(f2.open(QIODevice::ReadOnly));
+    QVERIFY(QString::fromUtf8(f2.readAll()).contains("[Slot][0]\nApp=helium\nArgs=--incognito\nGeometry=0,0,1,1\nProfile=Profile 1\n"));
 }
 
 void ConfigWriterTest::keepsGeneralKeys()

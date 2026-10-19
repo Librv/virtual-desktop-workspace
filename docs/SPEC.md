@@ -26,6 +26,8 @@ example "3 Konsoles":
 - a list of apps, each with:
   - the app (its `.desktop` file id, e.g. `org.kde.konsole`)
   - optional extra command-line arguments
+  - for a browser (only Helium now): an optional browser profile. The browser
+    opens in that profile. Without a profile, it opens its last-used profile
   - a position and size, stored as fractions of the screen area not covered by
     panels (so positions survive resolution and panel changes)
 
@@ -76,6 +78,23 @@ desktops are created.
 - While a fixed-size window of a launch is open, the launch counts as busy
   for up to 5 minutes after the launch. The desktop then asks for
   confirmation, as with other busy desktops.
+- Apps launch at the same time, with one exception: a browser gives a new
+  window to its running process. When a workspace has two or more slots of
+  one browser, vdwd launches those slots one at a time, in slot order. The
+  next browser slot starts when the window of the previous slot is placed,
+  when the placement timeout ends, or when its launch fails.
+- The reply to an open ("opened") goes out when each group of slots has one
+  launch that started, or has no slots left. The reply is an error only when
+  no launch started. Browser slots that start after the reply write a failure
+  to the log only.
+- If the saved browser profile does not exist, or vdwd cannot read the
+  profile list of the browser, the browser opens its last-used profile.
+  vdwd then writes a warning to its log and sends a notification that names
+  the app and the profile (one for each slot). vdwd never tells the browser
+  to use a profile that does not exist, because the browser then makes a new
+  empty profile.
+- The profile of a slot has priority over a `--profile-directory` option in
+  its arguments. Capture does not save a profile.
 
 ## The main shortcut: Ctrl+Meta+D
 

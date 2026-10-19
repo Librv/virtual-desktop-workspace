@@ -1,0 +1,9 @@
+[Global]
+IconName=preferences-desktop-virtual
+Name=Virtual Desktop Workspace
+Comment=Opens saved sets of apps on the current virtual desktop
+
+[Event/profileNotUsed]
+Name=Browser profile not used
+Comment=A browser slot opened the last-used profile instead of its saved profile
+Action=Popup

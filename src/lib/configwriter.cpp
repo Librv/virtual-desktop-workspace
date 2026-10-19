@@ -101,6 +101,9 @@ void write(KConfig &config, const QList<Workspace> &workspaces, const QString &d
             KConfigGroup sg = slots.group(QString::number(s));
             sg.writeEntry("App", slot.app);
             sg.writeEntry("Args", slot.args);
+            if (!slot.profile.isEmpty()) {
+                sg.writeEntry("Profile", slot.profile);
+            }
             sg.writeEntry("Geometry", formatGeometry(slot.geometry));
         }
     }

@@ -296,6 +296,7 @@ KCM.AbstractKCM {
                         required property int index
                         required property string app
                         required property string args
+                        required property string profile
                         required property real geoX
                         required property real geoY
                         required property real geoWidth
@@ -303,6 +304,14 @@ KCM.AbstractKCM {
 
                         Layout.fillWidth: true
                         readonly property var info: kcm.appInfo(app)
+                        readonly property var profiles: kcm.browserProfiles(app, profile)
+                        readonly property var profileEntries: {
+                            const entries = [{dir: "", text: i18n("Last used")}];
+                            for (const c of profiles.choices) {
+                                entries.push({dir: c.dir, text: c.missing ? i18n("%1 (missing)", c.dir) : c.name});
+                            }
+                            return entries;
+                        }
 
                         // Same color as this app's rectangle in the preview.
                         Rectangle {
@@ -343,6 +352,33 @@ KCM.AbstractKCM {
                                     text: card.args
                                     placeholderText: i18n("Extra command line arguments")
                                     onTextEdited: kcm.slots.setField(card.index, "args", text)
+                                }
+                                QQC2.ComboBox {
+                                    id: profileCombo
+                                    Kirigami.FormData.label: i18n("Profile:")
+                                    visible: card.profiles.isBrowser
+                                    model: card.profileEntries
+                                    textRole: "text"
+                                    valueRole: "dir"
+                                    // From the entries, not indexOfValue(): that binding is not
+                                    // evaluated again when the model is filled.
+                                    currentIndex: Math.max(0, card.profileEntries.findIndex(e => e.dir === card.profile))
+                                    onActivated: kcm.slots.setField(card.index, "profile", currentValue)
+                                }
+                                QQC2.Label {
+                                    visible: profileCombo.visible && card.profiles.error !== ""
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.Wrap
+                                    text: i18n("Cannot read the browser profiles: %1", card.profiles.error)
+                                    color: Kirigami.Theme.negativeTextColor
+                                    font: Kirigami.Theme.smallFont
+                                }
+                                QQC2.Label {
+                                    visible: profileCombo.visible && card.profile !== "" && kcm.hasProfileOption(card.args)
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.Wrap
+                                    text: i18n("The profile replaces the --profile-directory option in Arguments.")
+                                    font: Kirigami.Theme.smallFont
                                 }
                                 GridLayout {
                                     Kirigami.FormData.label: i18n("Position:")

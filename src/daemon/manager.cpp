@@ -3,6 +3,7 @@
 
 #include "manager.h"
 
+#include "browserprofile.h"
 #include "configwriter.h"
 #include "gesturecontroller.h"
 #include "kwinscripts.h"
@@ -10,6 +11,7 @@
 #include "layout.h"
 
 #include <KConfig>
+#include <KNotification>
 #include <KService>
 #include <KSharedConfig>
 
@@ -132,7 +134,7 @@ void Manager::openWorkspace(const Workspace &workspace, bool force, const Reply 
             reply(text);
         };
     }
-    m_scripts->query(QStringLiteral("empty"), [this, workspace, force, reply = done](const QJsonObject &result, const QString &error) {
+    m_scripts->query(QStringLiteral("empty"), [this, workspace, force, reply = done, launchReply = reply](const QJsonObject &result, const QString &error) {
         if (!error.isEmpty()) {
             reply(QStringLiteral("error: ") + error);
             return;
@@ -141,12 +143,14 @@ void Manager::openWorkspace(const Workspace &workspace, bool force, const Reply 
             reply(QStringLiteral("busy"));
             return;
         }
-        queryArea(m_scripts, [this, workspace, force, reply](const QRect &rect, const QString &areaError) {
+        queryArea(m_scripts, [this, workspace, force, reply, launchReply](const QRect &rect, const QString &areaError) {
             if (!areaError.isEmpty()) {
                 reply(QStringLiteral("error: ") + areaError);
                 return;
             }
-            launchSlots(workspace, rect, reply);
+            // Not `reply`: the open reply can come after a later open set
+            // m_opening, so it must not clear the flag.
+            launchSlots(workspace, rect, launchReply);
             // Registered now: from here pendingCount() answers for this open.
             if (!force) {
                 m_opening = false;
@@ -155,6 +159,19 @@ void Manager::openWorkspace(const Workspace &workspace, bool force, const Reply 
     });
 }
 
+struct Manager::OpenRun {
+    QList<Slot> slots;
+    QRect area;
+    int group = 0;
+    QList<QList<int>> chains; ///< slot indices, see launchChains
+    QList<bool> settled; ///< per chain: a launch spawned or no slots are left
+    LocalStateCache localStates; ///< read once per open, shared by the chains
+    bool anySpawned = false;
+    bool replied = false;
+    QString firstError;
+    Reply reply;
+};
+
 void Manager::launchSlots(const Workspace &workspace, const QRect &area, const Reply &reply)
 {
     if (workspace.slots.isEmpty()) {
@@ -162,45 +179,103 @@ void Manager::launchSlots(const Workspace &workspace, const QRect &area, const R
         return;
     }
 
-    struct State {
-        int remaining;
-        int failed = 0;
-        QString firstError;
-    };
-    auto state = std::make_shared<State>();
-    state->remaining = workspace.slots.size();
-    const int total = workspace.slots.size();
-    const int group = ++m_nextOpenId;
-    int order = 0;
+    auto run = std::make_shared<OpenRun>();
+    run->slots = workspace.slots;
+    run->area = area;
+    run->group = ++m_nextOpenId;
+    run->chains = launchChains(workspace.slots);
+    run->settled.resize(run->chains.size(), false);
+    run->reply = reply;
 
-    for (const Slot &slot : workspace.slots) {
-        // Register before launching: the window can in theory arrive before
-        // the job reports its pid. The pid is filled in below.
-        const int launchId = ++m_nextLaunchId;
-        const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        m_matcher.addPending({launchId, 0, slot.app, Layout::slotRect(area, slot.geometry), now, group, order++});
-        armExpiry();
+    // The first slot of every chain starts now, the others when the previous
+    // slot of their chain is done (see advanceChains).
+    for (int chain = 0; chain < run->chains.size(); ++chain) {
+        startChainSlot(run, chain, 0);
+    }
+}
 
-        m_launcher->launch(slot.app, slot.args, [this, state, launchId, total, reply](bool ok, qint64 pid, const QString &error) {
-            if (ok) {
-                m_matcher.setPid(launchId, pid);
-            } else {
-                qCWarning(VDW_DAEMON) << "launch failed:" << error;
-                m_matcher.remove(launchId);
-                armExpiry();
-                if (state->failed++ == 0) {
-                    state->firstError = error;
-                }
-            }
-            if (--state->remaining > 0) {
-                return;
-            }
-            if (state->failed == total) {
-                reply(QStringLiteral("error: ") + state->firstError);
-            } else {
-                reply(QStringLiteral("opened"));
-            }
+void Manager::startChainSlot(const std::shared_ptr<OpenRun> &run, int chain, int pos)
+{
+    const QList<int> &members = run->chains.at(chain);
+    const int index = members.at(pos);
+    const Slot &slot = run->slots.at(index);
+    const bool last = pos + 1 >= members.size();
+
+    // Register before launching: the window can in theory arrive before
+    // the job reports its pid. The pid is filled in below.
+    const int launchId = ++m_nextLaunchId;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    m_matcher.addPending({launchId, 0, slot.app, Layout::slotRect(run->area, slot.geometry), now, run->group, index});
+    armExpiry();
+    if (!last) {
+        m_chainNext.insert(launchId, [this, run, chain, pos] {
+            startChainSlot(run, chain, pos + 1);
         });
+    }
+
+    // Reply once every chain has a launch that spawned or has no slots left.
+    auto settle = [run] {
+        if (run->replied) {
+            return;
+        }
+        run->replied = true;
+        run->reply(run->anySpawned ? QStringLiteral("opened") : QStringLiteral("error: ") + run->firstError);
+    };
+    auto settleChain = [run, chain, settle] {
+        if (!run->settled.at(chain)) {
+            run->settled[chain] = true;
+            if (std::all_of(run->settled.cbegin(), run->settled.cend(), [](bool done) {
+                    return done;
+                })) {
+                settle();
+            }
+        }
+    };
+
+    const ProfileLaunch launch = slotLaunch(slot, run->localStates);
+    if (!launch.warning.isEmpty()) {
+        qCWarning(VDW_DAEMON) << slot.app << "profile" << slot.profile << "not used:" << launch.warning;
+        const KService::Ptr service = KService::serviceByDesktopName(slot.app);
+        const ProfileNotice notice = profileNotice(service ? service->name() : slot.app, slot.profile, launch.issue);
+        KNotification::event(QStringLiteral("profileNotUsed"), notice.title, notice.text, QStringLiteral("dialog-warning"));
+    }
+    m_launcher->launch(slot.app, launch.args, [this, run, launchId, last, settleChain](bool ok, qint64 pid, const QString &error) {
+        if (ok) {
+            m_matcher.setPid(launchId, pid);
+            run->anySpawned = true;
+            settleChain();
+            return;
+        }
+        qCWarning(VDW_DAEMON) << "launch failed:" << error;
+        m_matcher.remove(launchId);
+        armExpiry();
+        if (!run->replied && run->firstError.isEmpty()) {
+            run->firstError = error;
+        }
+        if (last) {
+            settleChain();
+        } else {
+            // The launch is no longer pending: the next slot starts at once.
+            advanceChains();
+        }
+    });
+}
+
+void Manager::advanceChains()
+{
+    QList<std::function<void()>> ready;
+    for (auto it = m_chainNext.begin(); it != m_chainNext.end();) {
+        if (m_matcher.contains(it.key())) {
+            ++it;
+        } else {
+            ready.append(it.value());
+            it = m_chainNext.erase(it);
+        }
+    }
+    // Each starter registers its pending entry before this returns, so
+    // pendingCount() does not drop to 0 while a chain has slots left.
+    for (const auto &next : std::as_const(ready)) {
+        next();
     }
 }
 
@@ -210,6 +285,8 @@ void Manager::expirePending()
     for (const PendingLaunch &launch : expired) {
         qCInfo(VDW_DAEMON) << "no window for" << launch.appId << "pid" << launch.pid << "(expired)";
     }
+    // Launches that expired inside Matcher::claim are not in `expired`, but are no longer pending.
+    advanceChains();
     armExpiry();
 }
 
@@ -256,6 +333,8 @@ QString Manager::claimWindow(const QString &windowJson)
         qCInfo(VDW_DAEMON) << "fixed-size window" << window.desktopFileName << "pid" << window.pid << "holds launch" << newlyHeld->launchId
                            << "for its main window";
     }
+    // Also covers launches that expired inside claim().
+    advanceChains();
     if (!launch) {
         qCInfo(VDW_DAEMON) << "window" << window.desktopFileName << "pid" << window.pid << "matches no launch";
         return QString();

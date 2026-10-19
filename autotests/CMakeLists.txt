@@ -25,6 +25,14 @@ ecm_add_test(execargstest.cpp
     LINK_LIBRARIES Qt6::Core Qt6::Test vdwcore
 )
 
+ecm_add_test(browserprofiletest.cpp
+    TEST_NAME browserprofiletest
+    LINK_LIBRARIES Qt6::Core Qt6::Test vdwcore
+)
+
+# The test uses plain string literals for brevity.
+target_compile_options(browserprofiletest PRIVATE -UQT_NO_CAST_FROM_ASCII -UQT_NO_CAST_TO_ASCII)
+
 ecm_add_test(matchertest.cpp
     TEST_NAME matchertest
     LINK_LIBRARIES Qt6::Core Qt6::Test vdwcore
@@ -39,6 +47,10 @@ ecm_add_test(shortcutkeystest.cpp
 add_executable(startupwindowhelper startupwindowhelper.cpp)
 target_link_libraries(startupwindowhelper PRIVATE Qt6::Gui)
 
+# Stands in for Helium in integrationtest: one process, many windows.
+add_executable(fakebrowser fakebrowser.cpp)
+target_link_libraries(fakebrowser PRIVATE Qt6::Gui Qt6::Network)
+
 # Skips unless run inside the nested session:
 #   scripts/dev-session.sh run -- ctest --preset dev -R integrationtest
 ecm_add_test(integrationtest.cpp
@@ -52,5 +64,7 @@ target_compile_definitions(integrationtest PRIVATE
     S1INJECT_PATH="${CMAKE_SOURCE_DIR}/spikes/S1/build/s1inject"
     S2FAKEINPUT_PATH="${CMAKE_SOURCE_DIR}/spikes/S2/build/s2-fakeinput"
     STARTUPHELPER_PATH="$<TARGET_FILE:startupwindowhelper>"
+    VDW_NOTIFYRC_PATH="${CMAKE_SOURCE_DIR}/src/daemon/vdw.notifyrc"
+    FAKEBROWSER_PATH="$<TARGET_FILE:fakebrowser>"
 )
-add_dependencies(integrationtest vdwd vdw-ui vdwctl startupwindowhelper)
+add_dependencies(integrationtest vdwd vdw-ui vdwctl startupwindowhelper fakebrowser)

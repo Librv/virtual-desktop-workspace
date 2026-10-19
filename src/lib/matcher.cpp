@@ -196,6 +196,13 @@ std::optional<Handover> Matcher::release(const QString &windowId, qint64 nowMs)
     return std::nullopt;
 }
 
+bool Matcher::contains(int launchId) const
+{
+    return std::any_of(m_pending.cbegin(), m_pending.cend(), [launchId](const PendingLaunch &p) {
+        return p.launchId == launchId;
+    });
+}
+
 QList<PendingLaunch> Matcher::expire(qint64 nowMs)
 {
     prune(nowMs);

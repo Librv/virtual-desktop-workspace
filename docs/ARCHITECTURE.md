@@ -34,9 +34,11 @@ C++ / Qt 6 / KDE Frameworks 6, started at login via XDG autostart (or a
 systemd user unit), plus a D-Bus `.service` file so a `callDBus` from the KWin
 script can start it.
 
-- **No Qt GUI (S5):** vdwd is a `QCoreApplication` and links only Qt
-  Core/DBus and KF6 ConfigCore, CoreAddons and Service (KF6 GlobalAccel,
-  DBusAddons, GuiAddons and KIOGui all pull in libQt6Gui). Everything that
+- **No Qt GUI app (S5):** vdwd is a `QCoreApplication` and links Qt
+  Core/DBus and KF6 ConfigCore, CoreAddons, Service and Notifications. KF6
+  Notifications pulls in libQt6Gui (DECISIONS 46), but vdwd starts no
+  `QGuiApplication`, so idle vdwd uses about 23 MB RSS. vdwd does not use
+  KF6 GlobalAccel, DBusAddons, GuiAddons or KIOGui. Everything that
   needs a GUI or Wayland runs in `vdw-ui` (below). It registers its D-Bus
   name with plain `registerService` and exits if the name is taken.
 - **Shortcuts (S1, S5):** one component `vdw` in kglobalaccel, one action per
@@ -114,6 +116,18 @@ Geometry=0.5,0,0.5,0.5
   shortcut action names. `Name` is what the user sees.
 - `App` is a `.desktop` id. `Args` is one string split with
   `KShell::splitArgs`.
+- `Profile` is optional. It is the Chromium profile folder name (`Profile 1`),
+  not the display name, so a rename in the browser does not break it. It has
+  an effect only when `App` is in the browser table
+  (`src/lib/browserprofile.cpp`, only `helium` now). The writer writes it
+  only when it is set.
+- At launch, vdwd reads the profile list (`profile.info_cache` in
+  `Local State` in the user data folder of the browser), removes all
+  `--profile-directory` options from `Args` and adds
+  `--profile-directory=<folder>`. If the folder is not in the list, or vdwd
+  cannot read `Local State`, vdwd only removes the option (the browser opens
+  its last-used profile) and logs a warning. vdwd merges the profile into `Args`,
+  so the launch message to `vdw-ui` stays `{app, args}`.
 - `Geometry` is `x,y,width,height` as fractions (0 to 1) of the usable area
   (`clientArea(PlacementArea, ...)`, so panels are excluded).
 - Slots are numbered from 0; workspaces are sorted by `Order`, then `Name`.
@@ -124,8 +138,8 @@ Geometry=0.5,0,0.5,0.5
   missing `Name` falls back to the id, an unknown `DefaultWorkspace` and bad
   `[General]` values fall back to defaults with a warning. Sorting is
   `Order`, then `Name` case-insensitively, then id.
-- In `ListWorkspaces`, a slot is `{app, args, geometry: {x, y, width,
-  height}}`.
+- In `ListWorkspaces`, a slot is `{app, args, profile, geometry: {x, y,
+  width, height}}`.
 
 ### D-Bus API
 
@@ -232,6 +246,23 @@ accepted: an app whose only window is fixed-size is never placed, and while
 such a window is open its launch counts as busy for up to 5 min.
 
 The rules use no caption test.
+A browser (Chromium type) gives a new window to its running process. Two
+windows of one browser then share the pid and the app id, so rule 2 can give a
+window to the wrong slot. To prevent this, vdwd launches the slots of one
+browser one at a time, in slot order (`launchChains`, pure and unit-tested).
+This applies when the workspace has two or more slots of that browser. Other
+slots are a chain of one and launch at once.
+
+The previous entry of a chain leaves the pending list in `claimWindow`,
+`expirePending` or a failed launch. The next slot starts in that same call.
+Thus the pending count is never 0 while a chain has slots left. `order`
+stays equal to the slot index and `group` stays one id per open. A held
+launch is still pending, so the next slot of its chain waits until the launch
+ends, for a maximum of 5 min.
+
+The reply to an open goes out when each chain has a launch that started, or
+has no slots left. It is `error: <first error>` only when no launch started,
+else `opened`. Failures after the reply go to the log only.
 
 Windows that match nothing are left alone. Activation tokens are not visible
 to KWin scripts, so they are not used. Captions are not stable; never match
@@ -261,6 +292,10 @@ Small command-line tool over the Manager interface (`list`, `open <id>
 QML KCM to list, create, edit and delete workspaces, set the default, edit
 slots, and trigger "Save current desktop as workspace". Shortcuts link to the
 standard Shortcuts page rather than reimplementing a key editor.
+
+For a slot of a known browser, the slot editor shows a "Profile" box. The KCM
+reads the `Local State` file of the browser each time the app or the profile
+of the slot changes. It writes only the profile folder name to vdwrc.
 
 ## Testing
 
