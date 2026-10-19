@@ -55,4 +55,8 @@ rewrite old entries, add a new one that supersedes them.
 
 ## Open
 
-- None right now.
+- Matcher check for a shared pid (from S4): one process can open the windows
+  of two slots, for example a single-process Konsole with a different `Args`
+  in each slot. The windows can then go to the wrong slots. T8 fixed this only
+  for browsers (row 43). The question is if the matcher must also do a check
+  for a shared pid for other apps.

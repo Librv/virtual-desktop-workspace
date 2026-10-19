@@ -24,6 +24,7 @@ Status values: `todo`, `in-progress`, `blocked`, `done`.
 | T6 | Save current desktop as workspace | T2, T3b | 2 | done |
 | T7 | Packaging, autostart, migrate off the bash script | all | 3 | done |
 | T8 | Browser profiles for each slot (Helium) | T7 | | done |
+| T9 | Browser profile follow-ups | T8 | | todo |
 
 ## File ownership (no two parallel tasks touch the same file)
 
