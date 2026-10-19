@@ -17,6 +17,7 @@ private Q_SLOTS:
     void removeClearsDefault();
     void moveAndDefault();
     void slotEditing();
+    void slotEditKeepsProfile();
     void slotMoving();
     void mergeNew();
     void mergeNewKeepsDeletions();
@@ -91,6 +92,25 @@ void WorkspaceModelTest::slotEditing()
 
     m.removeSlot(0, 0);
     QCOMPARE(slots.rowCount(), 0);
+}
+
+void WorkspaceModelTest::slotEditKeepsProfile()
+{
+    WorkspaceModel m;
+    m.addWorkspace("A");
+    m.addSlot(0);
+    Slot s = *m.slotAt(0, 0);
+    s.profile = QStringLiteral("Profile 1");
+    QVERIFY(m.setSlotAt(0, 0, s));
+    SlotModel slots(&m);
+    slots.setWorkspaceRow(0);
+    QVERIFY(slots.setField(0, "app", "helium"));
+    QVERIFY(slots.setField(0, "args", "--incognito"));
+    QVERIFY(slots.setField(0, "geoX", 0.25));
+    m.addSlot(0);
+    m.moveSlot(0, 1, 0);
+    QCOMPARE(m.slotAt(0, 1)->profile, QStringLiteral("Profile 1"));
+    QCOMPARE(m.slotAt(0, 0)->profile, QString());
 }
 
 void WorkspaceModelTest::slotMoving()

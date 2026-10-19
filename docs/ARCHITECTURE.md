@@ -114,6 +114,18 @@ Geometry=0.5,0,0.5,0.5
   shortcut action names. `Name` is what the user sees.
 - `App` is a `.desktop` id. `Args` is one string split with
   `KShell::splitArgs`.
+- `Profile` is optional. It is the Chromium profile folder name (`Profile 1`),
+  not the display name, so a rename in the browser does not break it. It has
+  an effect only when `App` is in the browser table
+  (`src/lib/browserprofile.cpp`, only `helium` now). The writer writes it
+  only when it is set.
+- At launch, vdwd reads the profile list (`profile.info_cache` in
+  `Local State` in the user data folder of the browser), removes all
+  `--profile-directory` options from `Args` and adds
+  `--profile-directory=<folder>`. If the folder is not in the list, or vdwd
+  cannot read `Local State`, vdwd only removes the option (the browser opens
+  its last-used profile) and logs a warning. vdwd merges the profile into `Args`,
+  so the launch message to `vdw-ui` stays `{app, args}`.
 - `Geometry` is `x,y,width,height` as fractions (0 to 1) of the usable area
   (`clientArea(PlacementArea, ...)`, so panels are excluded).
 - Slots are numbered from 0; workspaces are sorted by `Order`, then `Name`.
@@ -124,8 +136,8 @@ Geometry=0.5,0,0.5,0.5
   missing `Name` falls back to the id, an unknown `DefaultWorkspace` and bad
   `[General]` values fall back to defaults with a warning. Sorting is
   `Order`, then `Name` case-insensitively, then id.
-- In `ListWorkspaces`, a slot is `{app, args, geometry: {x, y, width,
-  height}}`.
+- In `ListWorkspaces`, a slot is `{app, args, profile, geometry: {x, y,
+  width, height}}`.
 
 ### D-Bus API
 

@@ -3,6 +3,7 @@
 
 #include "manager.h"
 
+#include "browserprofile.h"
 #include "configwriter.h"
 #include "gesturecontroller.h"
 #include "kwinscripts.h"
@@ -172,6 +173,7 @@ void Manager::launchSlots(const Workspace &workspace, const QRect &area, const R
     const int total = workspace.slots.size();
     const int group = ++m_nextOpenId;
     int order = 0;
+    LocalStateCache localStates;
 
     for (const Slot &slot : workspace.slots) {
         // Register before launching: the window can in theory arrive before
@@ -181,7 +183,11 @@ void Manager::launchSlots(const Workspace &workspace, const QRect &area, const R
         m_matcher.addPending({launchId, 0, slot.app, Layout::slotRect(area, slot.geometry), now, group, order++});
         armExpiry();
 
-        m_launcher->launch(slot.app, slot.args, [this, state, launchId, total, reply](bool ok, qint64 pid, const QString &error) {
+        const ProfileLaunch launch = slotLaunch(slot, localStates);
+        if (!launch.warning.isEmpty()) {
+            qCWarning(VDW_DAEMON) << slot.app << "profile" << slot.profile << "not used:" << launch.warning;
+        }
+        m_launcher->launch(slot.app, launch.args, [this, state, launchId, total, reply](bool ok, qint64 pid, const QString &error) {
             if (ok) {
                 m_matcher.setPid(launchId, pid);
             } else {

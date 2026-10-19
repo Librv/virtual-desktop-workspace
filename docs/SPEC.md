@@ -26,6 +26,8 @@ example "3 Konsoles":
 - a list of apps, each with:
   - the app (its `.desktop` file id, e.g. `org.kde.konsole`)
   - optional extra command-line arguments
+  - for a browser (only Helium now): an optional browser profile. The browser
+    opens in that profile. Without a profile, it opens its last-used profile
   - a position and size, stored as fractions of the screen area not covered by
     panels (so positions survive resolution and panel changes)
 
@@ -76,6 +78,13 @@ desktops are created.
 - While a fixed-size window of a launch is open, the launch counts as busy
   for up to 5 minutes after the launch. The desktop then asks for
   confirmation, as with other busy desktops.
+- If the saved browser profile does not exist, or vdwd cannot read the
+  profile list of the browser, the browser opens its last-used profile.
+  vdwd then writes a warning to its log. vdwd never tells the browser to use a
+  profile that does not exist, because the browser then makes a new empty
+  profile.
+- The profile of a slot has priority over a `--profile-directory` option in
+  its arguments. Capture does not save a profile.
 
 ## The main shortcut: Ctrl+Meta+D
 

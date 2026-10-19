@@ -25,6 +25,14 @@ ecm_add_test(execargstest.cpp
     LINK_LIBRARIES Qt6::Core Qt6::Test vdwcore
 )
 
+ecm_add_test(browserprofiletest.cpp
+    TEST_NAME browserprofiletest
+    LINK_LIBRARIES Qt6::Core Qt6::Test vdwcore
+)
+
+# The test uses plain string literals for brevity.
+target_compile_options(browserprofiletest PRIVATE -UQT_NO_CAST_FROM_ASCII -UQT_NO_CAST_TO_ASCII)
+
 ecm_add_test(matchertest.cpp
     TEST_NAME matchertest
     LINK_LIBRARIES Qt6::Core Qt6::Test vdwcore

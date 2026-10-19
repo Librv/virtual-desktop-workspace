@@ -70,6 +70,25 @@ private Q_SLOTS:
         QCOMPARE(ws.slots[1].geometry, QRectF(0, 0, 0.5, 1));
     }
 
+    void testProfile_data()
+    {
+        QTest::addColumn<QByteArray>("line");
+        QTest::addColumn<QString>("expected");
+        QTest::newRow("present") << QByteArray("Profile=Profile 1\n") << QStringLiteral("Profile 1");
+        QTest::newRow("absent") << QByteArray() << QString();
+        QTest::newRow("empty") << QByteArray("Profile=\n") << QString();
+        QTest::newRow("trimmed") << QByteArray("Profile=  Default  \n") << QStringLiteral("Default");
+        QTest::newRow("unicode") << QByteArray("Profile=Профиль 日本\n") << QString::fromUtf8("Профиль 日本");
+    }
+    void testProfile()
+    {
+        QFETCH(QByteArray, line);
+        QFETCH(QString, expected);
+        const Config c = parse("[Workspace][w][Slot][0]\nApp=helium\n" + line + "Geometry=0,0,1,1\n");
+        QVERIFY(c.warnings().isEmpty());
+        QCOMPARE(c.workspaces().first().slots.first().profile, expected);
+    }
+
     void testDefaults()
     {
         const Config c = parse("");
@@ -182,7 +201,7 @@ private Q_SLOTS:
             "[General]\nDefaultWorkspace=b\n\n"
             "[Workspace][a]\nName=A\nOrder=0\n\n"
             "[Workspace][b]\nName=B\nIcon=ic\nOrder=1\n\n"
-            "[Workspace][b][Slot][0]\nApp=org.kde.kate\nArgs=-n\nGeometry=0.25,0,0.5,1\n");
+            "[Workspace][b][Slot][0]\nApp=org.kde.kate\nArgs=-n\nProfile=Profile 1\nGeometry=0.25,0,0.5,1\n");
         const QJsonArray array = QJsonDocument::fromJson(c.toJson()).array();
         QCOMPARE(array.size(), 2);
         const QJsonObject a = array[0].toObject();
@@ -198,6 +217,7 @@ private Q_SLOTS:
         const QJsonObject slot = slots[0].toObject();
         QCOMPARE(slot[QStringLiteral("app")].toString(), QStringLiteral("org.kde.kate"));
         QCOMPARE(slot[QStringLiteral("args")].toString(), QStringLiteral("-n"));
+        QCOMPARE(slot[QStringLiteral("profile")].toString(), QStringLiteral("Profile 1"));
         QCOMPARE(slot[QStringLiteral("geometry")].toObject()[QStringLiteral("width")].toDouble(), 0.5);
     }
 };
