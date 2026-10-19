@@ -36,7 +36,7 @@ script can start it.
 
 - **No Qt GUI app (S5):** vdwd is a `QCoreApplication` and links Qt
   Core/DBus and KF6 ConfigCore, CoreAddons, Service and Notifications. KF6
-  Notifications pulls in libQt6Gui (DECISIONS 44), but vdwd starts no
+  Notifications pulls in libQt6Gui (DECISIONS 46), but vdwd starts no
   `QGuiApplication`, so idle vdwd uses about 23 MB RSS. vdwd does not use
   KF6 GlobalAccel, DBusAddons, GuiAddons or KIOGui. Everything that
   needs a GUI or Wayland runs in `vdw-ui` (below). It registers its D-Bus
@@ -256,7 +256,9 @@ slots are a chain of one and launch at once.
 The previous entry of a chain leaves the pending list in `claimWindow`,
 `expirePending` or a failed launch. The next slot starts in that same call.
 Thus the pending count is never 0 while a chain has slots left. `order`
-stays equal to the slot index and `group` stays one id per open.
+stays equal to the slot index and `group` stays one id per open. A held
+launch is still pending, so the next slot of its chain waits until the launch
+ends, for a maximum of 5 min.
 
 The reply to an open goes out when each chain has a launch that started, or
 has no slots left. It is `error: <first error>` only when no launch started,
